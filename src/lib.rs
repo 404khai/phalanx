@@ -3,25 +3,26 @@
 //! A high-performance, educational inference runtime for decoder-only
 //! language models, beginning with GGUF-format weights.
 //!
-//! Phase 1 establishes the library crate surface, typed errors, and logging.
-//! Subsequent phases add tensors, GGUF parsing, transformer layers, and
-//! generation.
+//! Phase 2 adds the contiguous [`tensor::Tensor`] abstraction and reference
+//! kernels. Later phases layer GGUF parsing, transformer blocks, and
+//! generation on top of this math foundation.
 //!
 //! # Crate layout
 //!
 //! - [`errors`] — typed [`errors::PhalanxError`] for library APIs
+//! - [`tensor`] — shapes, f32 storage, element-wise ops, matmul
 //! - [`utils`] — cross-cutting helpers (logging today; more later)
 //!
-//! Domain modules (`tensor`, `gguf`, `model`, …) are intentionally absent
-//! until their phases land. Empty placeholder directories hide incomplete APIs
-//! and invite premature abstraction.
+//! Remaining domain modules (`gguf`, `model`, …) appear when their phases land.
 
 #![doc(html_root_url = "https://docs.rs/phalanx/0.1.0")]
 
 pub mod errors;
+pub mod tensor;
 pub mod utils;
 
 pub use errors::{PhalanxError, Result};
+pub use tensor::{DType, Shape, Tensor, TensorError};
 pub use utils::{LogConfig, init_logging};
 
 /// Library version string, matching `Cargo.toml`.

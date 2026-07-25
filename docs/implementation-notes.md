@@ -1,9 +1,13 @@
-# Implementation Notes — Phase 1
+# Implementation Notes
 
 Notes capture decisions that are easy to lose in commit history. Prefer
 updating this file over leaving undocumented tribal knowledge.
 
-## Scope delivered
+---
+
+## Phase 1 — Repository foundation
+
+### Scope delivered
 
 - Cargo package `phalanx` with library (`src/lib.rs`) and binary (`src/main.rs`)
 - `errors` module: `PhalanxError`, `Result<T>`
@@ -12,70 +16,94 @@ updating this file over leaving undocumented tribal knowledge.
 - Docs: README, architecture, this file, CHANGELOG, LICENSE
 - Tests: unit tests in modules + `tests/smoke.rs`
 
-## Decision log
+### Decision log
 
-### 1. Library errors = `thiserror`, CLI = `anyhow`
+1. **Library errors = `thiserror`, CLI = `anyhow`** — matchable API vs edge ergonomics.
+2. **`tracing` for logging** — spans map to load / prefill / decode.
+3. **Edition 2024 + `rust-version = "1.85"`** — latest stable, greenfield.
+4. **Forbid `unsafe_code`** — force review before UB risk.
+5. **No empty domain folders** — tree reflects reality.
+6. **Commit `Cargo.lock`** — binary runtime needs reproducible builds.
 
-**Pros (chosen mix):** Embedders match on `PhalanxError`; CLI gets `Context`.
-**Cons:** Two error styles to teach newcomers.
-**Rejected alternative:** `anyhow` in the library — faster to write, worse API.
+---
 
-### 2. `tracing` for logging
+## Phase 2 — Math foundation
 
-**Pros:** Spans map cleanly to load / prefill / decode; wide ecosystem support.
-**Cons:** Heavier than `env_logger`.
-**Rejected alternative:** Defer logging until Phase 16 — we want lifecycle
-visibility while building early phases.
+### Scope delivered
 
-### 3. Edition 2024 + `rust-version = "1.85"`
+- `tensor` module: `DType`, `Shape`, `Tensor`, `TensorError`
+- Contiguous row-major `f32` storage with explicit strides helper
+- Ops: `add` / `sub` / `mul` / `div`, `scale`, `matmul`, `transpose`, `sum`
+- `PhalanxError::Tensor` nesting via `#[from]`
+- Criterion bench `benches/tensor_ops.rs` (elemwise add, matmul, transpose)
+- Unit + integration coverage for shape math and kernels
 
-**Pros:** Matches AGENTS.md “latest stable”; modern language defaults.
-**Cons:** Contributors on older toolchains must upgrade.
-**Reason:** Greenfield project; no compatibility debt yet.
+### Decision log
 
-### 4. Forbid `unsafe_code` at the crate lint level
+#### 1. Owned contiguous `Vec<f32>` (not `ndarray`)
 
-**Pros:** Forces explicit discussion before introducing UB risk.
-**Cons:** Will need a scoped `allow` when mmap / SIMD lands.
-**Reason:** Correctness culture > micro-optimization at foundation time.
+**Pros:** Clear memory model for an educational runtime; trivial aliasing story.
+**Cons:** No free broadcasting / advanced views.
+**Reason:** Teaching layout matters as much as shipping ops. Phase 5 can swap
+storage behind the façade.
 
-### 5. Do not create empty domain folders
+#### 2. `DType` tag with only `F32` today
 
-**Pros:** Tree reflects reality; no fake APIs.
-**Cons:** Diverges briefly from the full preferred tree in AGENTS.md.
-**Reason:** AGENTS.md says “only create folders when needed.”
+**Pros:** Call sites already thread a dtype; quantized variants slot in later.
+**Cons:** Slight indirection while only one variant exists.
+**Reason:** Avoid a painful API break when GGUF quants arrive.
 
-### 6. Commit `Cargo.lock`
+#### 3. No broadcasting in Phase 2
 
-Phalanx ships a binary runtime. Lockfile reproducibility matters for CLI
-users and CI. (Pure libraries often omit the lockfile; we are not pure.)
+**Pros:** Shape errors stay obvious; kernels stay short.
+**Cons:** Some NumPy-style one-liners need explicit `scale` / expand later.
+**Reason:** Attention / FFN paths use explicit shapes; broadcast bugs are subtle.
 
-## Testing strategy (Phase 1)
+#### 4. Matmul is naïve \(O(n^3)\) ijk loops
+
+**Pros:** Auditable reference; good correctness oracle for future kernels.
+**Cons:** Not competitive with BLAS.
+**Reason:** Phase 17/18 own performance work; wrong-fast is worthless.
+
+#### 5. Transpose copies into a new contiguous buffer
+
+**Pros:** Preserves the “always contiguous” invariant for every `Tensor`.
+**Cons:** Extra bandwidth vs a strided view.
+**Reason:** Defer strided tensors until KV-cache windows need them (Phase 12).
+
+#### 6. Criterion 0.7 (not 0.8)
+
+**Pros:** Honors `rust-version = "1.85"`.
+**Cons:** Misses newest Criterion features.
+**Reason:** Cargo rejected 0.8 (needs rustc 1.86). Bump MSRV intentionally later
+if we want 0.8.
+
+### Testing strategy (Phase 2)
 
 | Layer | Location | Covers |
 |---|---|---|
-| Unit | `errors`, `logging`, `lib` | Display, conversions, constants |
-| Integration | `tests/smoke.rs` | Public re-exports across crate boundary |
+| Unit | `tensor::*` | strides, offsets, constructors, ops |
+| Integration | `tests/smoke.rs` | public matmul + nested tensor errors |
+| Bench | `benches/tensor_ops.rs` | baseline latency for add / matmul / transpose |
 
-Logging’s success path is **not** asserted in unit tests: installing a global
-subscriber twice fails, and parallel tests would race. Invalid filter parsing
-is tested because it fails before `set_global_default`.
+### Performance notes
 
-## Performance notes
+Baseline only — numbers vary by machine. Use `cargo bench --bench tensor_ops`
+to refresh locally. Expect matmul_256 to dominate; treat regressions after
+kernel changes as signal, not absolute SLA yet.
 
-None yet — no kernels. Phase 2 will introduce Criterion (or built-in benches)
-alongside the tensor core.
+### Follow-ups deferred
 
-## Follow-ups deferred
-
-- CLI argument parsing (`clap`) → Phase 16 (or earlier if inspection tools need it)
+- Broadcasting / batched matmul → when attention needs them
+- f16 / bf16 / quantized storage → Phase 5+
+- SIMD / blocked matmul → Phase 17
+- Strided views → Phase 12 (KV cache)
+- CLI argument parsing (`clap`) → Phase 16
 - Workspace split → when compile time / deps justify it
-- `PhalanxError` variants for GGUF / tokenizer / tensor → with those phases
-- JSON / file logging layers → if operators need them
 
-## References used this phase
+### References used this phase
 
-- [thiserror](https://docs.rs/thiserror)
-- [anyhow](https://docs.rs/anyhow)
-- [tracing](https://docs.rs/tracing)
-- [The Cargo Book — package layout](https://doc.rust-lang.org/cargo/guide/project-layout.html)
+- Golub & Van Loan, *Matrix Computations* (matmul structure)
+- [NumPy C-order / row-major](https://numpy.org/doc/stable/user/basics.indexing.html)
+- [Criterion.rs](https://docs.rs/criterion)
+- Prior Phase 1 references (`thiserror`, `anyhow`, `tracing`)

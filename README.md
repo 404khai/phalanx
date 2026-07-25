@@ -8,7 +8,8 @@ Phalanx is built to be both:
 1. a **production-minded systems codebase** (correctness, structure, performance), and
 2. a **mini textbook** for how LLM inference actually works under the hood.
 
-> Status: **Phase 1 complete** — repository foundation. No model execution yet.
+> Status: **Phase 2 complete** — contiguous `f32` tensor math + reference kernels.
+> No GGUF loading or model execution yet.
 
 ---
 
@@ -20,22 +21,20 @@ Eventually Phalanx should support:
 |---|---|
 | GGUF loading | Planned (Phase 3 / 5) |
 | Tokenization & vocabulary | Planned (Phase 4) |
-| Tensor abstraction & ops | Planned (Phase 2) |
+| Tensor abstraction & ops | **Phase 2** |
 | Quantized tensors | Planned (Phase 5+) |
 | Decoder-only transformers | Planned (Phase 6–13) |
 | RMSNorm / RoPE / Attention / KV cache | Planned (Phases 8–12) |
 | Sampling (greedy, temp, top-k/p, min-p) | Planned (Phase 14) |
 | Streaming generation | Planned (Phase 15) |
-| CLI + library API | Partial (Phase 1 banner CLI) |
-| Logging, tests, docs | **Phase 1** |
-| Benchmarking & profiling | Planned (Phases 17–18) |
+| CLI + library API | Partial (banner CLI) |
+| Logging, tests, docs | Phase 1 |
+| Early microbenchmarks | **Phase 2** |
+| Full benchmark / profiling suite | Planned (Phases 17–18) |
 
 ---
 
-## Architecture (Phase 1)
-
-Phase 1 intentionally keeps the graph small. Domain subsystems appear only
-when their phase lands — empty folders are avoided on purpose.
+## Architecture (Phase 2)
 
 ```mermaid
 flowchart TB
@@ -45,12 +44,14 @@ flowchart TB
 
     subgraph library [phalanx library]
         API["Public API<br/>src/lib.rs"]
-        Errors["errors::<br/>PhalanxError"]
-        Utils["utils::<br/>init_logging"]
+        Errors["errors::PhalanxError"]
+        Utils["utils::init_logging"]
+        Tensor["tensor::Tensor"]
+        Shape["tensor::Shape"]
+        Ops["add / mul / matmul / …"]
     end
 
     subgraph future [Future phases]
-        Tensor["tensor"]
         GGUF["gguf"]
         Model["model / decoder"]
         Sample["sampling"]
@@ -59,10 +60,14 @@ flowchart TB
     CLI --> API
     API --> Errors
     API --> Utils
-    API -.-> Tensor
+    API --> Tensor
+    Tensor --> Shape
+    Tensor --> Ops
+    Ops --> Errors
     API -.-> GGUF
     GGUF -.-> Model
     Model -.-> Sample
+    Model -.-> Tensor
 ```
 
 Target end-state pipeline (not yet implemented):
@@ -76,36 +81,73 @@ flowchart LR
     Decoder --> Sampler
 ```
 
-See [docs/architecture.md](docs/architecture.md) for rationale and module
+See [docs/architecture.md](docs/architecture.md) for layout rationale and module
 boundaries.
+
+---
+
+## Memory layout (educational)
+
+Dense tensors are **contiguous row-major** `f32` buffers — the same convention
+NumPy calls “C-order”:
+
+```text
+shape [2, 3]     strides [3, 1]
+
+logical                          physical memory
+[[a00, a01, a02],                [a00, a01, a02, a10, a11, a12]
+ [a10, a11, a12]]
+```
+
+Linear offset: \(\sum_i index_i \cdot stride_i\).
+
+**Why this matters for inference:** weights and activations are huge. A clear
+layout contract lets later kernels (attention, matmul, KV cache writes) share
+one addressing model. Quantized GGUF blocks (Phase 5) will sit under the same
+`Tensor` / storage façade without changing shape math.
+
+| Choice | Pros | Cons | Decision |
+|---|---|---|---|
+| Row-major contiguous | Familiar, teaches layout, simple kernels | Not BLAS-col-major native | **Chosen** |
+| `ndarray` | Rich views / broadcast | Hides memory model | Deferred |
+| Strided views now | Cheap transpose | Breaks “always contiguous” | Deferred to KV cache |
 
 ---
 
 ## Current progress
 
-### Completed (Phase 1)
+### Completed
+
+#### Phase 1
 
 - [x] Cargo library + binary project (`edition = "2024"`)
-- [x] Folder structure for foundation modules only
-- [x] `rustfmt` + Clippy configuration (zero-warning policy)
+- [x] `rustfmt` + Clippy zero-warning policy
 - [x] Typed errors (`thiserror`) + CLI context (`anyhow`)
 - [x] Structured logging (`tracing`)
-- [x] README, changelog, license, architecture & implementation notes
-- [x] Smoke / unit tests
+- [x] Foundation documentation
+
+#### Phase 2
+
+- [x] `tensor` module (`DType`, `Shape`, `Tensor`, `TensorError`)
+- [x] Row-major strides / multi-index offset helpers
+- [x] Element-wise ops, scale, matmul, transpose
+- [x] Unit + integration tests
+- [x] Criterion microbenchmarks (`tensor_ops`)
 
 ### Known limitations
 
-- No tensor math, GGUF parser, tokenizer, or model execution.
+- Only `f32` storage — no f16 / bf16 / GGUF quantized types yet.
+- No broadcasting; operand shapes must match for element-wise ops.
+- Matmul is a naïve \(O(n^3)\) reference kernel (no BLAS / SIMD).
+- Transpose always copies to preserve contiguity.
+- No GGUF parser, tokenizer, or model execution.
 - CLI is a version banner only — no argument parsing yet.
-- Logging installs a process-global subscriber (fine for a binary; tests must
-  avoid double-init).
-- Single crate today; a workspace split is deferred until module weight justifies it.
 
 ### Next phase preview
 
-**Phase 2 — Math foundation:** tensor abstraction, memory layout, basic ops,
-unit tests, and early benchmarks. This unblocks GGUF weight materialization
-and every subsequent layer kernel.
+**Phase 3 — GGUF file parser:** magic / version validation, metadata key-values,
+tensor info records, and structured errors. This unlocks vocabulary (Phase 4)
+and weight loading (Phase 5).
 
 ---
 
@@ -113,8 +155,8 @@ and every subsequent layer kernel.
 
 | Phase | Focus |
 |---|---|
-| **1** | Repository foundation ← **you are here** |
-| 2 | Tensor abstraction & ops |
+| 1 | Repository foundation |
+| **2** | Tensor abstraction & ops ← **you are here** |
 | 3 | GGUF header / metadata parser |
 | 4 | Vocabulary & tokenizer |
 | 5 | Tensor / weight loading (+ mmap, quant metadata) |
@@ -129,7 +171,7 @@ Full phase definitions live in [`AGENTS.md`](AGENTS.md).
 
 ## Example usage
 
-### Run the Phase 1 CLI
+### Run the CLI
 
 ```bash
 cargo run
@@ -141,15 +183,24 @@ Optional logging:
 RUST_LOG=phalanx=debug cargo run
 ```
 
-### Use the library API
+### Tensor API
 
 ```rust
-use phalanx::{LogConfig, PhalanxError, init_logging};
+use phalanx::{Shape, Tensor};
 
-fn setup() -> Result<(), PhalanxError> {
-    init_logging(&LogConfig::default())?;
+fn demo() -> phalanx::Result<()> {
+    let a = Tensor::from_vec(vec![1.0, 2.0, 3.0, 4.0], Shape::new([2, 2])?)?;
+    let b = Tensor::from_vec(vec![5.0, 6.0, 7.0, 8.0], Shape::new([2, 2])?)?;
+    let c = a.matmul(&b)?;
+    assert_eq!(c.as_slice(), &[19.0, 22.0, 43.0, 50.0]);
     Ok(())
 }
+```
+
+### Benchmarks
+
+```bash
+cargo bench --bench tensor_ops
 ```
 
 ---
@@ -161,16 +212,17 @@ fn setup() -> Result<(), PhalanxError> {
 - Rust **1.85+** (stable), matching `rust-version` in `Cargo.toml`
 - `cargo`, `rustfmt`, `clippy` (via `rustup component add rustfmt clippy`)
 
-### Build / test / lint
+### Build / test / lint / bench
 
 ```bash
 cargo fmt --check
 cargo test
 cargo lint          # alias → clippy -D warnings
+cargo bench --bench tensor_ops
 cargo build --release
 ```
 
-### Project layout (Phase 1)
+### Project layout (Phase 2)
 
 ```text
 phalanx/
@@ -178,7 +230,9 @@ phalanx/
 │   ├── lib.rs           # library root & public re-exports
 │   ├── main.rs          # thin CLI entrypoint
 │   ├── errors/          # typed PhalanxError
+│   ├── tensor/          # shape, dtype, storage, ops
 │   └── utils/           # logging bootstrap
+├── benches/             # Criterion microbenchmarks
 ├── tests/               # crate-boundary smoke tests
 ├── docs/                # architecture & implementation notes
 ├── assets/              # reserved for fixtures / diagrams (no weights)
@@ -191,26 +245,15 @@ phalanx/
 
 ---
 
-## Implementation notes (Phase 1)
+## Implementation notes (summary)
 
-### Error handling split
-
-| Layer | Crate | Why |
+| Topic | Choice | Why |
 |---|---|---|
-| Library | `thiserror` → `PhalanxError` | Matchable, stable API for embedders |
-| Binary / examples | `anyhow` | Context chaining at the process edge |
-
-### Logging choice
-
-`tracing` over `log` + `env_logger` because inference naturally maps to
-**spans** (load, prefill, decode step). Paying the dependency cost now avoids
-a painful migration once kernels exist.
-
-### No premature modules
-
-`tensor/`, `gguf/`, `attention/`, etc. are **not** created empty. AGENTS.md
-allows those paths when needed; Phase 1 only creates folders that contain
-real code.
+| Library errors | `thiserror` → `PhalanxError` | Matchable API for embedders |
+| CLI errors | `anyhow` | Context at the process edge |
+| Logging | `tracing` | Future load/prefill/decode spans |
+| Tensor storage | Owned contiguous `Vec<f32>` | Teach layout; keep invariants simple |
+| Matmul | Naïve reference kernel | Correctness oracle before optimization |
 
 More detail: [docs/implementation-notes.md](docs/implementation-notes.md).
 
@@ -224,7 +267,7 @@ As phases land, this README will expand into explanations of:
 - Why quantization matters for local inference
 - How decoder-only transformers execute token-by-token
 - How KV cache turns \(O(n^2)\) decode into \(O(n)\) per step
-- Memory layout & the execution pipeline
+- The full execution pipeline beyond dense matmul
 - Performance considerations (threading, SIMD, flash-attention class kernels)
 
 ---
@@ -238,6 +281,7 @@ As phases land, this README will expand into explanations of:
 - [llama.cpp](https://github.com/ggerganov/llama.cpp)
 - [FlashAttention](https://arxiv.org/abs/2205.14135)
 - [Hugging Face Transformers](https://huggingface.co/docs/transformers)
+- Golub & Van Loan, *Matrix Computations*
 
 ---
 
