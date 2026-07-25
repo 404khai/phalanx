@@ -1,0 +1,32 @@
+[package]
+name = "phalanx"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Phalanx Runtime — a high-performance, educational LLM inference engine"
+license = "MIT"
+readme = "README.md"
+keywords = ["llm", "inference", "gguf", "transformer", "runtime"]
+categories = ["science", "parsing"]
+repository = "https://github.com/phalanx-runtime/phalanx"
+
+[dependencies]
+anyhow = "1.0.104"
+thiserror = "2.0.19"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+
+[lints.rust]
+# Inference kernels may eventually need `unsafe` for SIMD/mmap, but the
+# foundation forbids it until a reviewed hot path justifies an exception.
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# Module-level docs already cover intent; forcing every item is noise at this stage.
+module_name_repetitions = "allow"
+# Binary and tests legitimately print status lines before structured logging is wired.
+print_stdout = "allow"
+print_stderr = "allow"
