@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Phase 3 GGUF parser: [`gguf`](src/gguf/) module with streaming header,
+  metadata KV (all value types), tensor info directory, alignment /
+  `data_offset`, and nested [`GgufError`](src/gguf/error.rs).
+- Educational GGUF notes in [`docs/gguf.md`](docs/gguf.md).
 - Phase 2 math foundation: [`tensor`](src/tensor/) module with `DType`, `Shape`,
   `Tensor`, and nested [`TensorError`](src/tensor/error.rs).
 - Contiguous row-major `f32` storage with stride / multi-index offset helpers.

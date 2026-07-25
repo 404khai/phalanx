@@ -107,3 +107,69 @@ kernel changes as signal, not absolute SLA yet.
 - [NumPy C-order / row-major](https://numpy.org/doc/stable/user/basics.indexing.html)
 - [Criterion.rs](https://docs.rs/criterion)
 - Prior Phase 1 references (`thiserror`, `anyhow`, `tracing`)
+
+---
+
+## Phase 3 — GGUF file parser
+
+### Scope delivered
+
+- `gguf` module: `GgufFile`, `GgufHeader`, `MetadataValue`, `TensorInfo`, `GgmlType`
+- Streaming little-endian reader with running byte offset
+- Metadata KV decode for all `gguf_metadata_value_type`s (incl. nested arrays)
+- Tensor directory parse + alignment (`general.alignment` or default 32)
+- `data_offset` computation; weight blob intentionally unread
+- `PhalanxError::Gguf` nesting
+- In-test `GgufBuilder` fixture writer + unit/integration tests
+- Educational notes in `docs/gguf.md`
+
+### Decision log
+
+#### 1. Streaming `Read` instead of slurp / mmap
+
+**Pros:** Inspect multi-GB checkpoints without pulling weights into RAM.
+**Cons:** More cursor bookkeeping than `Cursor<&[u8]>` alone.
+**Reason:** Phase 3’s job is the directory, not the payload.
+
+#### 2. Hand-rolled parser (no crates.io `gguf`)
+
+**Pros:** Matches the educational mission; typed `GgufError` we control.
+**Cons:** We own format quirks.
+**Reason:** Senior readers should see the byte layout, not a black box.
+
+#### 3. Accept versions 2 and 3
+
+**Pros:** Covers virtually all modern GGUF files.
+**Cons:** Must not silently accept structural breaks in future versions.
+**Reason:** Reject unknown versions loudly via `UnsupportedVersion`.
+
+#### 4. Preserve unknown `ggml_type` as `GgmlType::Unknown`
+
+**Pros:** Inspection still works when ggml adds formats.
+**Cons:** Callers must handle `Unknown` before dequant (Phase 5).
+**Reason:** Forward-compatible directory listing.
+
+#### 5. Safety limits on strings / arrays / counts
+
+**Pros:** Hostile headers cannot force absurd allocations.
+**Cons:** Extremely exotic files might need limit bumps.
+**Reason:** Parser robustness before trust.
+
+### Testing strategy (Phase 3)
+
+| Layer | Location | Covers |
+|---|---|---|
+| Unit | `gguf::*` | magic, version, alignment, tensor offsets, arrays |
+| Integration | `tests/smoke.rs` | public `GgufFile` / `GgufError` re-exports |
+
+### Follow-ups deferred
+
+- Vocabulary decode from `tokenizer.ggml.*` → Phase 4
+- `mmap` / dequant of `tensor_data` → Phase 5
+- Big-endian GGUF → if/when real files require it
+- CLI `inspect` subcommand → Phase 16
+
+### References used this phase
+
+- [GGUF specification](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md)
+- [llama.cpp](https://github.com/ggerganov/llama.cpp)
