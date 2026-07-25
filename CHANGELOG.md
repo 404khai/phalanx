@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Phase 2 math foundation: [`tensor`](src/tensor/) module with `DType`, `Shape`,
+  `Tensor`, and nested [`TensorError`](src/tensor/error.rs).
+- Contiguous row-major `f32` storage with stride / multi-index offset helpers.
+- Reference kernels: element-wise `add`/`sub`/`mul`/`div`, `scale`, `matmul`,
+  `transpose`, `sum`.
+- Criterion microbenchmarks in [`benches/tensor_ops.rs`](benches/tensor_ops.rs).
 - Phase 1 repository foundation: Cargo library + binary crate.
 - Typed [`PhalanxError`](src/errors/mod.rs) surface via `thiserror`.
 - Structured logging bootstrap via `tracing` / `tracing-subscriber`.

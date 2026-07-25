@@ -1,8 +1,9 @@
 //! Typed error surface for the Phalanx library API.
 //!
 //! Library code returns [`PhalanxError`] so callers can match on failure
-//! kinds (I/O vs configuration vs future GGUF/model errors). The CLI binary
-//! wraps these with [`anyhow`] for ergonomic context chaining at the edge.
+//! kinds (I/O vs configuration vs tensor vs future GGUF/model errors). The
+//! CLI binary wraps these with [`anyhow`] for ergonomic context chaining at
+//! the edge.
 //!
 //! # Design tradeoff
 //!
@@ -16,14 +17,15 @@
 
 use thiserror::Error;
 
+use crate::tensor::TensorError;
+
 /// Convenient alias for fallible library operations.
 pub type Result<T> = std::result::Result<T, PhalanxError>;
 
 /// Top-level error type returned by Phalanx library APIs.
 ///
-/// Variants stay coarse in Phase 1. Subsystem-specific errors (GGUF parse,
-/// tokenizer, tensor layout) will be added as those modules land, either as
-/// new variants or as nested error types converted via `#[from]`.
+/// Subsystem errors nest behind dedicated variants (e.g. [`PhalanxError::Tensor`])
+/// so callers can match broadly or down to the detailed cause.
 #[derive(Debug, Error)]
 pub enum PhalanxError {
     /// Filesystem or other I/O failure (model paths, mmap, etc.).
@@ -33,6 +35,10 @@ pub enum PhalanxError {
     /// Invalid runtime or model configuration supplied by the caller.
     #[error("configuration error: {0}")]
     Config(String),
+
+    /// Shape / layout / kernel failure from the tensor subsystem.
+    #[error(transparent)]
+    Tensor(#[from] TensorError),
 
     /// Unexpected internal invariant violation.
     ///

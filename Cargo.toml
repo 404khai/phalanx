@@ -30,3 +30,10 @@ module_name_repetitions = "allow"
 # Binary and tests legitimately print status lines before structured logging is wired.
 print_stdout = "allow"
 print_stderr = "allow"
+
+[dev-dependencies]
+criterion = { version = "0.7.0", features = ["html_reports"] }
+
+[[bench]]
+name = "tensor_ops"
+harness = false
