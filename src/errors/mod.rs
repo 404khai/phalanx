@@ -17,6 +17,7 @@
 
 use thiserror::Error;
 
+use crate::gguf::GgufError;
 use crate::tensor::TensorError;
 
 /// Convenient alias for fallible library operations.
@@ -39,6 +40,10 @@ pub enum PhalanxError {
     /// Shape / layout / kernel failure from the tensor subsystem.
     #[error(transparent)]
     Tensor(#[from] TensorError),
+
+    /// GGUF container parse / validation failure.
+    #[error(transparent)]
+    Gguf(#[from] GgufError),
 
     /// Unexpected internal invariant violation.
     ///

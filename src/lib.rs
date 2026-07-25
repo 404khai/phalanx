@@ -3,25 +3,25 @@
 //! A high-performance, educational inference runtime for decoder-only
 //! language models, beginning with GGUF-format weights.
 //!
-//! Phase 2 adds the contiguous [`tensor::Tensor`] abstraction and reference
-//! kernels. Later phases layer GGUF parsing, transformer blocks, and
-//! generation on top of this math foundation.
+//! Phase 3 adds a streaming [`gguf::GgufFile`] parser for headers, metadata,
+//! and tensor directory records. Weight materialization arrives in Phase 5.
 //!
 //! # Crate layout
 //!
 //! - [`errors`] — typed [`errors::PhalanxError`] for library APIs
 //! - [`tensor`] — shapes, f32 storage, element-wise ops, matmul
+//! - [`gguf`] — GGUF container parse (no weight loads yet)
 //! - [`utils`] — cross-cutting helpers (logging today; more later)
-//!
-//! Remaining domain modules (`gguf`, `model`, …) appear when their phases land.
 
 #![doc(html_root_url = "https://docs.rs/phalanx/0.1.0")]
 
 pub mod errors;
+pub mod gguf;
 pub mod tensor;
 pub mod utils;
 
 pub use errors::{PhalanxError, Result};
+pub use gguf::{GgmlType, GgufError, GgufFile, GgufHeader, MetadataValue, TensorInfo};
 pub use tensor::{DType, Shape, Tensor, TensorError};
 pub use utils::{LogConfig, init_logging};
 

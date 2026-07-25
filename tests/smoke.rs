@@ -3,7 +3,9 @@
 //! These exercise the crate boundary (not `#[cfg(test)]` internals) so
 //! refactors that break re-exports fail loudly.
 
-use phalanx::{PhalanxError, RUNTIME_NAME, Shape, Tensor, TensorError, VERSION};
+use phalanx::{
+    GgmlType, GgufError, GgufFile, PhalanxError, RUNTIME_NAME, Shape, Tensor, TensorError, VERSION,
+};
 
 #[test]
 fn public_version_constant_is_exported() {
@@ -42,4 +44,18 @@ fn tensor_errors_nest_under_phalanx_error() {
         err,
         PhalanxError::Tensor(TensorError::ShapeMismatch { .. })
     ));
+}
+
+#[test]
+fn gguf_rejects_bad_magic_across_crate_boundary() {
+    let err = GgufFile::from_bytes(b"NOTG........").unwrap_err();
+    assert!(matches!(
+        err,
+        PhalanxError::Gguf(GgufError::InvalidMagic { .. })
+    ));
+}
+
+#[test]
+fn gguf_type_names_are_exported() {
+    assert_eq!(GgmlType::Q4K.name(), "q4_k");
 }
