@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Phase 5 weight loading: [`weights`](src/weights/) module with read-only
+  `memmap2` mapping, [`QuantMeta`](src/weights/quant.rs) block layouts,
+  payload bounds checks, and dense `f32`/`f16` materialization into
+  [`Tensor`](src/tensor/). Nested [`WeightsError`](src/weights/error.rs).
+- Educational weights notes in [`docs/weights.md`](docs/weights.md).
 - Phase 4 tokenizer: [`tokenizer`](src/tokenizer/) module loading vocab /
   specials from GGUF metadata, with encode (greedy / BPE) and decode
   (`▁` / `<0xXX>`), plus nested [`TokenizerError`](src/tokenizer/error.rs).

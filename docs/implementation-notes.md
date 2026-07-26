@@ -21,7 +21,8 @@ updating this file over leaving undocumented tribal knowledge.
 1. **Library errors = `thiserror`, CLI = `anyhow`** — matchable API vs edge ergonomics.
 2. **`tracing` for logging** — spans map to load / prefill / decode.
 3. **Edition 2024 + `rust-version = "1.85"`** — latest stable, greenfield.
-4. **Forbid `unsafe_code`** — force review before UB risk.
+4. **`unsafe_code` lint** — started as `forbid`; Phase 5 lowered to `deny` so
+   `weights::storage` can opt in for `memmap2` after review.
 5. **No empty domain folders** — tree reflects reality.
 6. **Commit `Cargo.lock`** — binary runtime needs reproducible builds.
 
@@ -216,11 +217,69 @@ kernel changes as signal, not absolute SLA yet.
 ### Follow-ups deferred
 
 - Chat template / Jinja (`tokenizer.chat_template`) → CLI/runtime phases
-- Golden parity vs llama.cpp on real GGUF → Phase 5+
-- `mmap` / dequant → Phase 5
+- Golden parity vs llama.cpp on real GGUF → later phases
 
 ### References used this phase
 
 - [GGUF tokenizer metadata](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md)
 - SentencePiece (Kudo & Richardson, 2018)
 - GPT-2 BPE (Radford et al.)
+
+---
+
+## Phase 5 — Weight loading
+
+### Scope delivered
+
+- `weights` module: `WeightSet`, `WeightStorage`, `WeightTensor`, `QuantMeta`
+- Read-only `memmap2` mapping (sole `unsafe` island)
+- Quant block metadata for dense + legacy Q + K-quants
+- Payload bounds validation for every tensor at open
+- Materialize `f32` / `f16` → `tensor::Tensor`
+- `PhalanxError::Weights` nesting
+- Docs: `docs/weights.md`
+
+### Decision log
+
+#### 1. Crate lint `unsafe_code = "deny"` (was `forbid`)
+
+**Pros:** Still defaults to no unsafe; reviewed modules can opt in.
+**Cons:** A careless `#[allow]` could slip in.
+**Reason:** `forbid` cannot be overridden; mmap requires one `unsafe` call.
+
+#### 2. Map the whole file, not only `tensor_data`
+
+**Pros:** Simple absolute offsets; parse from the same bytes.
+**Cons:** Slightly larger map than a data-only window.
+**Reason:** Clarity over micro-optimization.
+
+#### 3. Defer block dequant kernels
+
+**Pros:** Phase stays focused; avoids half-baked Q4_K code.
+**Cons:** Can't run quantized matmul yet.
+**Reason:** Dequant belongs next to the kernels that consume it (Phase 7+).
+
+#### 4. IQ / ternary / MX types unsupported for sizing
+
+**Pros:** No wrong `type_size` guesses.
+**Cons:** Those GGUF files won't open until sizes are verified.
+**Reason:** Prefer loud `UnsupportedType` over silent corruption.
+
+### Testing strategy (Phase 5)
+
+| Layer | Location | Covers |
+|---|---|---|
+| Unit | `weights::*` | quant sizes, f32 fixture, mmap tmpfile, truncated reject |
+| Integration | `tests/smoke.rs` | public `QuantMeta` export |
+
+### Follow-ups deferred
+
+- Q4_0 / Q4_K / Q8_0 dequant → layer kernels
+- Model config binding named tensors → Phase 6
+- CLI `inspect` → Phase 16
+
+### References used this phase
+
+- [GGUF specification](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md)
+- [llama.cpp / ggml quant blocks](https://github.com/ggml-org/llama.cpp)
+- [memmap2](https://docs.rs/memmap2)

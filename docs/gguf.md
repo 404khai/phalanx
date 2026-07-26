@@ -39,7 +39,8 @@ It succeeds earlier GGML/GGMF/GGJT layouts. Authoritative spec:
 | Magic / version | ✅ validate (`2` or `3`) |
 | Metadata KV (all value types + nested arrays) | ✅ |
 | Tensor info directory | ✅ |
-| Weight bytes / dequant | ❌ Phase 5 |
+| Weight bytes / mmap / quant meta | ✅ Phase 5 (`weights` module) |
+| Block dequant → f32 | ❌ later (layer kernels) |
 | Vocabulary / tokenizer | ✅ Phase 4 (`tokenizer` module) |
 
 ## Common metadata keys

@@ -3,15 +3,17 @@
 //! A high-performance, educational inference runtime for decoder-only
 //! language models, beginning with GGUF-format weights.
 //!
-//! Phase 4 adds [`tokenizer::Tokenizer`]: load vocabulary and special tokens
-//! from GGUF metadata, encode prompts, and decode generated ids.
+//! Phase 5 adds [`weights::WeightSet`]: memory-map a GGUF file, resolve each
+//! tensor's byte span via quantization metadata, and materialize dense
+//! `f32` / `f16` payloads into [`tensor::Tensor`].
 //!
 //! # Crate layout
 //!
 //! - [`errors`] — typed [`errors::PhalanxError`] for library APIs
 //! - [`tensor`] — shapes, f32 storage, element-wise ops, matmul
-//! - [`gguf`] — GGUF container parse (no weight loads yet)
+//! - [`gguf`] — GGUF container parse
 //! - [`tokenizer`] — vocab, special tokens, encode / decode
+//! - [`weights`] — mmap + quant metadata + dense materialization
 //! - [`utils`] — cross-cutting helpers (logging today; more later)
 
 #![doc(html_root_url = "https://docs.rs/phalanx/0.1.0")]
@@ -21,6 +23,7 @@ pub mod gguf;
 pub mod tensor;
 pub mod tokenizer;
 pub mod utils;
+pub mod weights;
 
 pub use errors::{PhalanxError, Result};
 pub use gguf::{GgmlType, GgufError, GgufFile, GgufHeader, MetadataValue, TensorInfo};
@@ -30,6 +33,7 @@ pub use tokenizer::{
     Vocabulary,
 };
 pub use utils::{LogConfig, init_logging};
+pub use weights::{QuantMeta, WeightSet, WeightStorage, WeightTensor, WeightsError};
 
 /// Library version string, matching `Cargo.toml`.
 ///
