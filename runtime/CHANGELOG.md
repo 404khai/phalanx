@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Phase 7 embedding layer: [`layers`](src/layers/) module with
+  [`EmbeddingTable`](src/layers/embedding.rs) gather from
+  `token_embd.weight`, ggml layout reinterpret to `[vocab, embd]`, and nested
+  [`LayersError`](src/layers/error.rs).
+- Educational embedding notes in [`docs/embeddings.md`](docs/embeddings.md).
 - Phase 6 model configuration: [`model`](src/model/) module with
   [`Architecture`](src/model/architecture.rs), validated
   [`ModelConfig`](src/model/config.rs) (attention / RoPE hparams) from GGUF

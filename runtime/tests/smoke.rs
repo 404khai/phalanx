@@ -4,9 +4,9 @@
 //! refactors that break re-exports fail loudly.
 
 use phalanx::{
-    Architecture, EncodeOptions, GgmlType, GgufError, GgufFile, ModelConfig, ModelError,
-    PhalanxError, QuantMeta, RUNTIME_NAME, Shape, SpecialTokens, Tensor, TensorError, Tokenizer,
-    TokenizerModel, VERSION, Vocabulary,
+    Architecture, EmbeddingTable, EncodeOptions, GgmlType, GgufError, GgufFile, LayersError,
+    ModelConfig, ModelError, PhalanxError, QuantMeta, RUNTIME_NAME, Shape, SpecialTokens, Tensor,
+    TensorError, Tokenizer, TokenizerModel, VERSION, Vocabulary,
 };
 
 #[test]
@@ -82,6 +82,35 @@ fn model_errors_nest_under_phalanx_error() {
     // Public re-exports stay usable at the crate boundary.
     assert_eq!(Architecture::Llama.as_str(), "llama");
     let _ = ModelConfig::from_parts;
+}
+
+#[test]
+fn embedding_gather_works_across_crate_boundary() {
+    let table = EmbeddingTable::from_tensor(
+        Tensor::from_vec(
+            vec![
+                1.0, 2.0, // token 0
+                3.0, 4.0, // token 1
+            ],
+            Shape::new([2, 2]).unwrap(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let out = table.forward(&[1, 0]).unwrap();
+    assert_eq!(out.as_slice(), &[3.0, 4.0, 1.0, 2.0]);
+}
+
+#[test]
+fn layers_errors_nest_under_phalanx_error() {
+    let err = PhalanxError::Layers(LayersError::TokenOutOfRange {
+        id: 9,
+        vocab_size: 2,
+    });
+    assert!(matches!(
+        err,
+        PhalanxError::Layers(LayersError::TokenOutOfRange { .. })
+    ));
 }
 
 #[test]

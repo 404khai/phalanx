@@ -36,9 +36,9 @@ impl WeightTensor<'_> {
 
     /// Materialize dense `f32` / `f16` weights into a runtime [`Tensor`].
     ///
-    /// Quantized types return [`WeightsError::DequantNotImplemented`] in
-    /// Phase 5 — block dequant kernels arrive with the first matmul that needs
-    /// them (Phase 7+), once shapes are known from model config.
+    /// Quantized types return [`WeightsError::DequantNotImplemented`].
+    /// Dense `f32`/`f16` embeddings materialize in Phase 7; block dequant
+    /// arrives with the first quantized matmul path that needs it.
     ///
     /// # Errors
     ///

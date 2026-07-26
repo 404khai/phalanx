@@ -14,7 +14,7 @@
 mod architecture;
 mod config;
 mod error;
-mod keys;
+pub(crate) mod keys;
 
 pub use architecture::Architecture;
 pub use config::{AttentionConfig, DEFAULT_ROPE_FREQ_BASE, ModelConfig, RopeConfig, RopeScaling};

@@ -18,6 +18,7 @@
 use thiserror::Error;
 
 use crate::gguf::GgufError;
+use crate::layers::LayersError;
 use crate::model::ModelError;
 use crate::tensor::TensorError;
 use crate::tokenizer::TokenizerError;
@@ -59,6 +60,10 @@ pub enum PhalanxError {
     /// Model architecture / hyperparameter failure.
     #[error(transparent)]
     Model(#[from] ModelError),
+
+    /// Decoder layer load / forward failure.
+    #[error(transparent)]
+    Layers(#[from] LayersError),
 
     /// Unexpected internal invariant violation.
     ///

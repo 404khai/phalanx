@@ -327,7 +327,6 @@ kernel changes as signal, not absolute SLA yet.
 ### Follow-ups deferred
 
 - Qwen2 / Phi / MoE architecture variants
-- Named weight → layer binding → Phase 7+
 - Cross-check `vocab_size` vs tokenizer length → when both load together
 
 ### References used this phase
@@ -336,3 +335,56 @@ kernel changes as signal, not absolute SLA yet.
 - [GGUF specification](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md)
 - [RoFormer](https://arxiv.org/abs/2104.09864)
 - llama.cpp `gguf-py/gguf/constants.py`
+
+---
+
+## Phase 7 — Embedding layer
+
+### Scope delivered
+
+- `layers` module: `EmbeddingTable`, `LayersError`, `TOKEN_EMBD_WEIGHT`
+- Load `token_embd.weight`, validate against `ModelConfig`
+- Reinterpret ggml `[n_embd, n_vocab]` bytes as row-major `[vocab, embd]`
+- `forward` / `forward_one` gather
+- Squeeze trailing unitary dims
+- Docs: `docs/embeddings.md`
+
+### Decision log
+
+#### 1. New `layers` module (not under `model`)
+
+**Pros:** Keeps hparams separate from kernels; RoPE/attn/FFN land nearby.
+**Cons:** Extra top-level module.
+**Reason:** Phase 8–11 are all layer kernels.
+
+#### 2. Reinterpret shape instead of transpose-copy
+
+**Pros:** Zero-copy on multi-GB embedding matrices.
+**Cons:** Easy to get wrong without the ggml-order comment.
+**Reason:** Educational runtime should teach the layout, not hide a silent copy.
+
+#### 3. Dense-only embeddings in Phase 7
+
+**Pros:** Uses existing `to_f32_tensor`; scope stays focused.
+**Cons:** Quantized GGUF embeddings still fail materialize.
+**Reason:** Dequant belongs with the first kernel that needs blocks at scale;
+gather correctness is the Phase 7 deliverable.
+
+### Testing strategy (Phase 7)
+
+| Layer | Location | Covers |
+|---|---|---|
+| Unit | `layers::embedding` | GGUF fixture gather, trailing ones, OOR, missing weight |
+| Integration | `tests/smoke.rs` | public gather + nested `LayersError` |
+
+### Follow-ups deferred
+
+- Quantized embedding dequant
+- Tied `output.weight` / input embeddings
+- Absolute position embeddings (Llama uses RoPE → Phase 8)
+
+### References used this phase
+
+- [LLaMA](https://arxiv.org/abs/2302.13971)
+- [GGUF specification](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md)
+- llama.cpp `TOKEN_EMBD` naming

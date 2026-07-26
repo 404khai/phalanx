@@ -1,4 +1,4 @@
-# Architecture — Phase 6
+# Architecture — Phase 7
 
 This document tracks architectural intent as Phalanx grows. Update it every
 phase; the README embeds a summary diagram for quick reading.
@@ -10,7 +10,7 @@ phase; the README embeds a summary diagram for quick reading.
 - **Incremental completeness** — each phase ships a compiling, tested slice.
 - **Educational clarity** — diagrams and notes explain *why*, not only *what*.
 
-## Phase 6 component map
+## Phase 7 component map
 
 ```mermaid
 flowchart TB
@@ -21,6 +21,7 @@ flowchart TB
     tok["tokenizer::Tokenizer"]
     weights["weights::WeightSet"]
     model["model::ModelConfig"]
+    layers["layers::EmbeddingTable"]
     tensor["tensor::Tensor"]
 
     main --> lib
@@ -29,32 +30,39 @@ flowchart TB
     lib --> tok
     lib --> weights
     lib --> model
+    lib --> layers
     lib --> tensor
     tok --> gguf
     weights --> gguf
     model --> gguf
+    layers --> weights
+    layers --> model
+    layers --> tensor
     weights --> tensor
-    model -.-> weights
 ```
 
 ### Responsibilities
 
-| Component | Responsibility | Non-goals (Phase 6) |
+| Component | Responsibility | Non-goals (Phase 7) |
 |---|---|---|
 | `gguf` | Parse directory / metadata | Own the byte map |
 | `weights` | mmap, bounds check, dense materialize | Full Q4_K dequant kernels |
 | `tokenizer` | Vocab encode/decode | Chat templates |
-| `model` | Architecture + validated hparams | Layer execution / weight binding |
+| `model` | Architecture + validated hparams | Execute layers |
+| `layers` | Embedding gather (more kernels later) | RoPE / attention / FFN |
 | `tensor` | Contiguous f32 math | On-disk layout |
 
-## Config load pipeline
+## Embedding load pipeline
 
 ```mermaid
 flowchart LR
-    Meta["GgufFile metadata"] --> Arch["general.architecture"]
-    Arch --> Keys["{arch}.* hparams"]
-    Keys --> Validate["shape / GQA / RoPE checks"]
-    Validate --> Cfg["ModelConfig"]
+    W["WeightSet"] --> T["token_embd.weight"]
+    C["ModelConfig"] --> V["shape checks"]
+    T --> M["f32/f16 materialize"]
+    M --> R["reinterpret [vocab, embd]"]
+    V --> R
+    R --> E["EmbeddingTable"]
+    E --> G["forward / gather"]
 ```
 
 ## Boundary rules
@@ -66,6 +74,7 @@ flowchart LR
 5. **Tokenizer reads only metadata** — weights module owns file bytes.
 6. **Quantized payloads stay as `&[u8]`** until a kernel needs dequant.
 7. **Layers read shapes from `ModelConfig`**, not raw metadata maps.
+8. **ggml dimension order is reinterpreted explicitly** at layer boundaries.
 
 ## Module ownership
 
@@ -75,23 +84,24 @@ flowchart LR
 | `gguf` | Header, metadata, tensor info | Phase 3 |
 | `tokenizer` | Vocab, specials, encode/decode | Phase 4 |
 | `weights` | mmap, quant meta, materialize | Phase 5 |
-| `model` | Architecture + hyperparameters | **Phase 6** |
+| `model` | Architecture + hyperparameters | Phase 6 |
+| `layers` | Embedding (+ future kernels) | **Phase 7** |
 
 ## Tradeoffs recorded
 
-### Llama-only vs multi-arch parser
+### Reinterpret vs transpose-copy
 
 | Option | Pros | Cons |
 |---|---|---|
-| **Llama-only (chosen)** | Tight Phase 6 scope; clear validation | Other GGUF archs rejected loudly |
-| Generic key reader for all archs | Broader open | Fake “support” without kernels |
+| **Reinterpret `[vocab, embd]` (chosen)** | Zero copy; matches ggml bytes | Callers must understand ggml order |
+| Explicit transpose into new buffer | “Obvious” PyTorch layout | Wasteful bandwidth on huge vocabs |
 
-### Nested `ModelError` vs `PhalanxError::Config(String)`
+### `layers` module vs stuffing into `model`
 
 | Option | Pros | Cons |
 |---|---|---|
-| **Nested typed error (chosen)** | Matchable; consistent with gguf/tokenizer | Another variant |
-| String `Config` only | Fewer types | Callers scrape messages |
+| **`layers` (chosen)** | Room for RoPE / attn / FFN | Extra module |
+| Everything under `model` | Fewer top-level mods | Mixes hparams with kernels |
 
 ## Evolution policy
 

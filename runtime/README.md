@@ -8,8 +8,8 @@ Phalanx is built to be both:
 1. a **production-minded systems codebase** (correctness, structure, performance), and
 2. a **mini textbook** for how LLM inference actually works under the hood.
 
-> Status: **Phase 6 complete** — Llama-style `ModelConfig` from GGUF metadata.
-> Embeddings and layer kernels come next.
+> Status: **Phase 7 complete** — token `EmbeddingTable` gather from GGUF weights.
+> Rotary embeddings (`RoPE`) come next.
 
 ---
 
@@ -25,8 +25,9 @@ Eventually Phalanx should support:
 | Tokenization & vocabulary               | Phase 4                |
 | Tensor abstraction & ops                | Phase 2                |
 | Quantized tensors (metadata / views)    | Phase 5 (dequant later) |
-| Model config (Llama hparams)            | **Phase 6**            |
-| Decoder-only transformers               | Planned (Phase 7–13)   |
+| Model config (Llama hparams)            | Phase 6                |
+| Token embedding gather                  | **Phase 7**            |
+| Decoder-only transformers               | Planned (Phase 8–13)   |
 | RMSNorm / RoPE / Attention / KV cache   | Planned (Phases 8–12)  |
 | Sampling (greedy, temp, top-k/p, min-p) | Planned (Phase 14)     |
 | Streaming generation                    | Planned (Phase 15)     |
@@ -40,7 +41,7 @@ Eventually Phalanx should support:
 
 
 
-## Architecture (Phase 6)
+## Architecture (Phase 7)
 
 ```mermaid
 flowchart TB
@@ -56,10 +57,11 @@ flowchart TB
         Tok["tokenizer::Tokenizer"]
         Weights["weights::WeightSet"]
         Model["model::ModelConfig"]
+        Emb["layers::EmbeddingTable"]
     end
 
     subgraph future [Future phases]
-        Decoder["embeddings / layers / decoder"]
+        Decoder["RoPE / norm / attn / FFN / decoder"]
     end
 
     CLI --> API
@@ -69,17 +71,20 @@ flowchart TB
     API --> Tok
     API --> Weights
     API --> Model
+    API --> Emb
     Tok --> GGUF
     Weights --> GGUF
     Model --> GGUF
+    Emb --> Weights
+    Emb --> Model
+    Emb --> Tensor
     Weights --> Tensor
-    Model -.-> Decoder
-    Weights -.-> Decoder
+    Emb -.-> Decoder
 ```
 
 See [docs/architecture.md](docs/architecture.md), [docs/gguf.md](docs/gguf.md),
 [docs/tokenizer.md](docs/tokenizer.md), [docs/weights.md](docs/weights.md),
-and [docs/model.md](docs/model.md).
+[docs/model.md](docs/model.md), and [docs/embeddings.md](docs/embeddings.md).
 
 ---
 
@@ -152,10 +157,16 @@ Block dequant kernels arrive with later layer work.
 - [x] Structural validation (head dims, GQA ratio, RoPE parity)
 - [x] Defaults for missing `head_count_kv` and `rope.freq_base`
 
+#### Phase 7
+
+- [x] `layers` module: `EmbeddingTable::from_weights` / `forward`
+- [x] Bind `token_embd.weight` with ggml → `[vocab, embd]` reinterpret
+- [x] Config shape checks + trailing-`1` dim squeeze
+
 ### Known limitations
 
 - Only `general.architecture = "llama"` is configured (others rejected).
-- Config does not yet bind named weight tensors to layers.
+- Embedding gather requires dense `f32`/`f16` materialization (no quant dequant yet).
 - Quantized types are viewable as bytes but not yet dequantized to `f32`.
 - Encode is a reference implementation (greedy / BPE), not guaranteed HF parity.
 - Little-endian only (GGUF default).
@@ -164,8 +175,8 @@ Block dequant kernels arrive with later layer work.
 
 ### Next phase preview
 
-**Phase 7 — Embedding layer:** look up token embeddings from loaded weights using
-`ModelConfig` shapes.
+**Phase 8 — Rotary embeddings:** apply RoPE to Q/K using `ModelConfig` rope
+hparams.
 
 ---
 
@@ -179,8 +190,9 @@ Block dequant kernels arrive with later layer work.
 | 3     | GGUF header / metadata parser                                      |
 | 4     | Vocabulary & tokenizer                                             |
 | 5     | Tensor / weight loading (+ mmap, quant metadata)                   |
-| **6** | Model config (Llama-style) ← **you are here**                      |
-| 7–13  | Embeddings → RoPE → RMSNorm → FFN → Attention → KV cache → Decoder |
+| 6     | Model config (Llama-style)                                         |
+| **7** | Embedding layer ← **you are here**                                 |
+| 8–13  | RoPE → RMSNorm → FFN → Attention → KV cache → Decoder              |
 | 14–16 | Sampling → streaming generation → full CLI                         |
 | 17–20 | Profiling → benchmarks → examples → docs polish                    |
 
@@ -235,6 +247,19 @@ fn load_hparams(path: &str) -> phalanx::Result<ModelConfig> {
 }
 ```
 
+### Embedding gather (library)
+
+```rust
+use phalanx::{EmbeddingTable, ModelConfig, WeightSet};
+
+fn embed(path: &str, ids: &[u32]) -> phalanx::Result<phalanx::Tensor> {
+    let weights = WeightSet::open_mmap(path)?;
+    let config = ModelConfig::from_gguf(weights.gguf())?;
+    let table = EmbeddingTable::from_weights(&weights, &config)?;
+    table.forward(ids)
+}
+```
+
 
 
 ### Tensor API
@@ -286,7 +311,7 @@ cargo build --release
 
 
 
-### Project layout (Phase 6)
+### Project layout (Phase 7)
 
 ```text
 runtime/
@@ -299,10 +324,11 @@ runtime/
 │   ├── tokenizer/       # vocab, specials, encode/decode
 │   ├── weights/         # mmap, quant metadata, materialize
 │   ├── model/           # architecture + transformer config
+│   ├── layers/          # embedding (+ future kernels)
 │   └── utils/           # logging bootstrap
 ├── benches/             # Criterion microbenchmarks
 ├── tests/               # crate-boundary smoke tests
-├── docs/                # architecture, GGUF, tokenizer, weights, model
+├── docs/                # architecture, GGUF, tokenizer, weights, model, embeddings
 ├── assets/              # reserved for fixtures / diagrams (no weights)
 ├── examples/            # reserved for Phase 19
 ├── AGENTS.md
@@ -322,6 +348,7 @@ runtime/
 | GGUF I/O       | Streaming `Read` + byte cursor | Inspect multi-GB models without loading weights |
 | Weight I/O     | `memmap2` read-only map        | Open multi-GB checkpoints without copying       |
 | Model config   | Llama-only validated struct    | Honest scope; layers share one hparam source    |
+| Embeddings     | Reinterpret ggml layout        | Zero-copy gather; teach ne[0]-innermost order   |
 | Tokenizer      | Hand-rolled greedy / BPE       | Teach encode/decode; avoid heavy HF deps        |
 | Tensor storage | Owned contiguous `Vec<f32>`    | Teach layout; keep invariants simple            |
 | Matmul         | Naïve reference kernel         | Correctness oracle before optimization          |
@@ -342,9 +369,9 @@ As phases land, this README will expand into explanations of:
 - The full execution pipeline beyond dense matmul
 - Performance considerations (threading, SIMD, flash-attention class kernels)
 
-GGUF / tokenizer / weights / model notes: [docs/gguf.md](docs/gguf.md),
+Subsystem notes: [docs/gguf.md](docs/gguf.md),
 [docs/tokenizer.md](docs/tokenizer.md), [docs/weights.md](docs/weights.md),
-[docs/model.md](docs/model.md).
+[docs/model.md](docs/model.md), [docs/embeddings.md](docs/embeddings.md).
 
 ---
 

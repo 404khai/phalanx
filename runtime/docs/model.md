@@ -53,7 +53,7 @@ Optional: `vocab_size`, `attention.key_length` / `value_length`, RoPE scaling
 | GQA / MHA sizing helpers | ✅ |
 | RoPE scaling metadata capture | ✅ (kernels later) |
 | Qwen2 / Phi / MoE architectures | ❌ later |
-| Named weight → layer binding | ❌ Phase 7+ |
+| Named weight → layer binding | ✅ Phase 7 (`token_embd.weight`) |
 
 ## Example
 
