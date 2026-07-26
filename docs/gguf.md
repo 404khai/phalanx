@@ -40,7 +40,7 @@ It succeeds earlier GGML/GGMF/GGJT layouts. Authoritative spec:
 | Metadata KV (all value types + nested arrays) | ✅ |
 | Tensor info directory | ✅ |
 | Weight bytes / dequant | ❌ Phase 5 |
-| Vocabulary decode from tokenizer keys | ❌ Phase 4 |
+| Vocabulary / tokenizer | ✅ Phase 4 (`tokenizer` module) |
 
 ## Common metadata keys
 
@@ -48,7 +48,7 @@ It succeeds earlier GGML/GGMF/GGJT layouts. Authoritative spec:
 - `general.name` — display name
 - `general.alignment` — data alignment override
 - `{arch}.block_count`, `{arch}.embedding_length`, … — hyperparameters
-- `tokenizer.ggml.*` — vocabulary (consumed in Phase 4)
+- `tokenizer.ggml.*` — vocabulary (see [tokenizer.md](tokenizer.md))
 
 ## Safety limits
 

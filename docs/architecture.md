@@ -1,4 +1,4 @@
-# Architecture — Phase 3
+# Architecture — Phase 4
 
 This document tracks architectural intent as Phalanx grows. Update it every
 phase; the README embeds a summary diagram for quick reading.
@@ -10,92 +10,77 @@ phase; the README embeds a summary diagram for quick reading.
 - **Incremental completeness** — each phase ships a compiling, tested slice.
 - **Educational clarity** — diagrams and notes explain *why*, not only *what*.
 
-## Phase 3 component map
+## Phase 4 component map
 
 ```mermaid
 flowchart TB
     main["main.rs"]
     lib["lib.rs"]
     errors["errors::PhalanxError"]
-    logging["utils::logging"]
-    tensor["tensor::Tensor"]
     gguf["gguf::GgufFile"]
-    reader["GgufReader<br/>byte cursor"]
-    meta["MetadataValue"]
-    tinfo["TensorInfo"]
+    tok["tokenizer::Tokenizer"]
+    vocab["Vocabulary"]
+    special["SpecialTokens"]
+    tensor["tensor::Tensor"]
 
     main --> lib
     lib --> errors
-    lib --> logging
-    lib --> tensor
     lib --> gguf
-    gguf --> reader
-    gguf --> meta
-    gguf --> tinfo
+    lib --> tok
+    lib --> tensor
+    tok --> gguf
+    tok --> vocab
+    tok --> special
+    tok --> errors
     gguf --> errors
-    tensor --> errors
 ```
 
 ### Responsibilities
 
-| Component | Responsibility | Non-goals (Phase 3) |
+| Component | Responsibility | Non-goals (Phase 4) |
 |---|---|---|
-| `main.rs` | Process entry, banner | Path inspect CLI |
+| `gguf` | Parse container metadata | Weight bytes |
+| `tokenizer` | Vocab load, specials, encode/decode | Chat templates / Jinja |
 | `tensor` | Contiguous f32 math | Quantized storage |
-| `gguf` | Parse header, KV metadata, tensor directory | Weight `mmap` / dequant |
-| `errors` | Nest `GgufError` / `TensorError` | Exit-code mapping |
+| `main` | Banner | Inspect CLI |
 
-## GGUF parse pipeline
+## Token path
 
 ```mermaid
 flowchart LR
-    Bytes["Read stream"] --> Magic["magic + version"]
-    Magic --> Counts["tensor_count + kv_count"]
-    Counts --> KV["metadata KV loop"]
-    KV --> Align["resolve alignment"]
-    Align --> TI["tensor info loop"]
-    TI --> Pad["data_offset = align_offset(pos)"]
-    Pad --> Stop["stop — weights unread"]
+    GGUF["GgufFile metadata"] --> Load["Tokenizer::from_gguf"]
+    Load --> Enc["encode(text)"]
+    Enc --> Ids["token ids"]
+    Ids --> Dec["decode(ids)"]
+    Dec --> Text["surface text"]
 ```
 
 ## Boundary rules
 
 1. **Library never depends on CLI concerns.**
-2. **Typed errors stay in the library** — `anyhow` only at the process edge.
+2. **Typed errors stay in the library.**
 3. **No empty domain modules.**
 4. **`unsafe` forbidden** until reviewed mmap/SIMD.
-5. **Tensors stay contiguous** in the runtime math layer.
-6. **GGUF parse must not load `tensor_data`** until Phase 5.
+5. **GGUF parse must not load `tensor_data`** until Phase 5.
+6. **Tokenizer reads only metadata** — never opens weight blobs.
 
 ## Module ownership
 
 | Module | Owns | Introduced |
 |---|---|---|
-| `tensor` | Contiguous buffers, dtype, shapes, ops | Phase 2 |
-| `gguf` | Header, metadata, tensor info, alignment | **Phase 3** |
-| `tokenizer` | Vocab, encode/decode | Phase 4 |
+| `tensor` | Contiguous buffers, shapes, ops | Phase 2 |
+| `gguf` | Header, metadata, tensor info | Phase 3 |
+| `tokenizer` | Vocab, specials, encode/decode | **Phase 4** |
 | `model` | Config + weight handles | Phase 6 |
-| `attention` / `kv_cache` | Decode-critical path | Phases 11–12 |
-| `sampling` | Logits → token | Phase 14 |
-| `runtime` | Orchestration / streaming | Phases 13–15 |
-| `cli` | User-facing commands | Phase 16 |
 
 ## Tradeoffs recorded
 
-### Streaming `Read` vs full buffer vs mmap-now
+### Hand-rolled tokenizer vs `tokenizers` crate
 
 | Option | Pros | Cons |
 |---|---|---|
-| **Streaming `Read` (chosen)** | Multi-GB safe; no `unsafe` | Manual endian helpers |
-| Slurp `Vec<u8>` | Simple tests | Wasteful for real models |
-| `mmap` in Phase 3 | Fast inspect of weights too | Premature `unsafe` / platform code |
-
-### Hand-rolled parser vs crates.io `gguf`
-
-| Option | Pros | Cons |
-|---|---|---|
-| **Hand-rolled (chosen)** | Educational; exact error surface | We maintain format edge cases |
-| External crate | Faster to “just load” | Opaque to readers of this repo |
+| **Hand-rolled (chosen)** | Auditable; uses GGUF tables directly | Edge-case drift vs HF |
+| Hugging Face `tokenizers` | High parity | Heavy; bypasses GGUF education |
 
 ## Evolution policy
 

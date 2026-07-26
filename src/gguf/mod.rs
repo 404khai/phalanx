@@ -43,3 +43,7 @@ pub use types::{
     GGUF_VERSION_V3, GgmlType, MetadataValueType, NAME_KEY, SUPPORTED_VERSIONS, align_offset,
 };
 pub use value::{MetadataArray, MetadataEntry, MetadataValue};
+
+/// Synthetic GGUF writer shared by unit tests across modules.
+#[cfg(test)]
+pub use file::test_support;

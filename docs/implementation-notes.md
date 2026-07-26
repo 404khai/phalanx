@@ -164,7 +164,6 @@ kernel changes as signal, not absolute SLA yet.
 
 ### Follow-ups deferred
 
-- Vocabulary decode from `tokenizer.ggml.*` → Phase 4
 - `mmap` / dequant of `tensor_data` → Phase 5
 - Big-endian GGUF → if/when real files require it
 - CLI `inspect` subcommand → Phase 16
@@ -173,3 +172,55 @@ kernel changes as signal, not absolute SLA yet.
 
 - [GGUF specification](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md)
 - [llama.cpp](https://github.com/ggerganov/llama.cpp)
+
+---
+
+## Phase 4 — Vocabulary & tokenizer
+
+### Scope delivered
+
+- `tokenizer` module: `Tokenizer`, `Vocabulary`, `SpecialTokens`, `TokenizerModel`
+- Load from `tokenizer.ggml.*` via `Tokenizer::from_gguf`
+- Decode with SentencePiece `▁` + `<0xXX>` byte pieces
+- Encode via greedy longest-match or BPE merges
+- `PhalanxError::Tokenizer` nesting
+- Docs: `docs/tokenizer.md`
+
+### Decision log
+
+#### 1. Hand-rolled encode/decode (no HF `tokenizers`)
+
+**Pros:** Teaches the data path; zero new deps; uses GGUF tables directly.
+**Cons:** Not guaranteed bit-identical to every HF export.
+**Reason:** Educational runtime first; golden tests can tighten later.
+
+#### 2. Default decode skips specials + control
+
+**Pros:** Display text matches what users expect from chat UIs.
+**Cons:** Callers debugging ids must opt into raw decode.
+**Reason:** `DecodeOptions` exposes both behaviours.
+
+#### 3. Default encode prepends BOS
+
+**Pros:** Matches common Llama prefill behaviour.
+**Cons:** Some models omit BOS — disable via `EncodeOptions`.
+**Reason:** Safe default for decoder-only chat checkpoints.
+
+### Testing strategy (Phase 4)
+
+| Layer | Location | Covers |
+|---|---|---|
+| Unit | `tokenizer::*` | from_gguf, greedy/BPE round-trip, missing keys |
+| Integration | `tests/smoke.rs` | public encode/decode re-exports |
+
+### Follow-ups deferred
+
+- Chat template / Jinja (`tokenizer.chat_template`) → CLI/runtime phases
+- Golden parity vs llama.cpp on real GGUF → Phase 5+
+- `mmap` / dequant → Phase 5
+
+### References used this phase
+
+- [GGUF tokenizer metadata](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md)
+- SentencePiece (Kudo & Richardson, 2018)
+- GPT-2 BPE (Radford et al.)

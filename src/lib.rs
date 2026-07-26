@@ -3,14 +3,15 @@
 //! A high-performance, educational inference runtime for decoder-only
 //! language models, beginning with GGUF-format weights.
 //!
-//! Phase 3 adds a streaming [`gguf::GgufFile`] parser for headers, metadata,
-//! and tensor directory records. Weight materialization arrives in Phase 5.
+//! Phase 4 adds [`tokenizer::Tokenizer`]: load vocabulary and special tokens
+//! from GGUF metadata, encode prompts, and decode generated ids.
 //!
 //! # Crate layout
 //!
 //! - [`errors`] — typed [`errors::PhalanxError`] for library APIs
 //! - [`tensor`] — shapes, f32 storage, element-wise ops, matmul
 //! - [`gguf`] — GGUF container parse (no weight loads yet)
+//! - [`tokenizer`] — vocab, special tokens, encode / decode
 //! - [`utils`] — cross-cutting helpers (logging today; more later)
 
 #![doc(html_root_url = "https://docs.rs/phalanx/0.1.0")]
@@ -18,11 +19,16 @@
 pub mod errors;
 pub mod gguf;
 pub mod tensor;
+pub mod tokenizer;
 pub mod utils;
 
 pub use errors::{PhalanxError, Result};
 pub use gguf::{GgmlType, GgufError, GgufFile, GgufHeader, MetadataValue, TensorInfo};
 pub use tensor::{DType, Shape, Tensor, TensorError};
+pub use tokenizer::{
+    DecodeOptions, EncodeOptions, SpecialTokens, Tokenizer, TokenizerError, TokenizerModel,
+    Vocabulary,
+};
 pub use utils::{LogConfig, init_logging};
 
 /// Library version string, matching `Cargo.toml`.

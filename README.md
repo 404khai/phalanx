@@ -8,8 +8,8 @@ Phalanx is built to be both:
 1. a **production-minded systems codebase** (correctness, structure, performance), and
 2. a **mini textbook** for how LLM inference actually works under the hood.
 
-> Status: **Phase 3 complete** — GGUF header / metadata / tensor-info parser.
-> Weight bytes are **not** loaded yet (Phase 5). Tokenizer comes in Phase 4.
+> Status: **Phase 4 complete** — GGUF tokenizer (vocab, specials, encode/decode).
+> Weight bytes are **not** loaded yet (Phase 5).
 
 ---
 
@@ -17,25 +17,29 @@ Phalanx is built to be both:
 
 Eventually Phalanx should support:
 
-| Capability | Status |
-|---|---|
-| GGUF header / metadata / tensor info | **Phase 3** |
-| GGUF weight loading (`mmap` / dequant) | Planned (Phase 5) |
-| Tokenization & vocabulary | Planned (Phase 4) |
-| Tensor abstraction & ops | Phase 2 |
-| Quantized tensors | Planned (Phase 5+) |
-| Decoder-only transformers | Planned (Phase 6–13) |
-| RMSNorm / RoPE / Attention / KV cache | Planned (Phases 8–12) |
-| Sampling (greedy, temp, top-k/p, min-p) | Planned (Phase 14) |
-| Streaming generation | Planned (Phase 15) |
-| CLI + library API | Partial (banner CLI) |
-| Logging, tests, docs | Phase 1 |
-| Early microbenchmarks | Phase 2 |
-| Full benchmark / profiling suite | Planned (Phases 17–18) |
+
+| Capability                              | Status                 |
+| --------------------------------------- | ---------------------- |
+| GGUF header / metadata / tensor info    | Phase 3                |
+| GGUF weight loading (`mmap` / dequant)  | Planned (Phase 5)      |
+| Tokenization & vocabulary               | **Phase 4**            |
+| Tensor abstraction & ops                | Phase 2                |
+| Quantized tensors                       | Planned (Phase 5+)     |
+| Decoder-only transformers               | Planned (Phase 6–13)   |
+| RMSNorm / RoPE / Attention / KV cache   | Planned (Phases 8–12)  |
+| Sampling (greedy, temp, top-k/p, min-p) | Planned (Phase 14)     |
+| Streaming generation                    | Planned (Phase 15)     |
+| CLI + library API                       | Partial (banner CLI)   |
+| Logging, tests, docs                    | Phase 1                |
+| Early microbenchmarks                   | Phase 2                |
+| Full benchmark / profiling suite        | Planned (Phases 17–18) |
+
 
 ---
 
-## Architecture (Phase 3)
+
+
+## Architecture (Phase 4)
 
 ```mermaid
 flowchart TB
@@ -49,12 +53,11 @@ flowchart TB
         Utils["utils::init_logging"]
         Tensor["tensor::Tensor"]
         GGUF["gguf::GgufFile"]
-        Meta["metadata KV"]
-        TInfo["tensor info dir"]
+        Tok["tokenizer::Tokenizer"]
+        Vocab["Vocabulary + specials"]
     end
 
     subgraph future [Future phases]
-        Tok["tokenizer"]
         Weights["weight load"]
         Model["model / decoder"]
     end
@@ -64,24 +67,30 @@ flowchart TB
     API --> Utils
     API --> Tensor
     API --> GGUF
-    GGUF --> Meta
-    GGUF --> TInfo
-    GGUF --> Errors
-    GGUF -.-> Tok
+    API --> Tok
+    Tok --> GGUF
+    Tok --> Vocab
+    Tok --> Errors
     GGUF -.-> Weights
     Weights -.-> Model
     Model -.-> Tensor
+    Model -.-> Tok
 ```
 
-See [docs/architecture.md](docs/architecture.md) and [docs/gguf.md](docs/gguf.md).
+
+
+See [docs/architecture.md](docs/architecture.md), [docs/gguf.md](docs/gguf.md),
+and [docs/tokenizer.md](docs/tokenizer.md).
 
 ---
+
+
 
 ## Why GGUF exists (educational)
 
 Training checkpoints are optimized for *training frameworks*, not local
 inference: sharded files, Python pickles, and weak quantization metadata. GGUF
-packs **typed metadata + a tensor directory + an `mmap`-friendly weight blob**
+packs **typed metadata + a tensor directory + an** `mmap`**-friendly weight blob**
 into one file so a small native runtime can load models without a Python stack.
 
 ```text
@@ -98,69 +107,95 @@ Offsets inside each `TensorInfo` are relative to that blob (per the
 
 ---
 
+
+
 ## Memory layout (tensors)
 
-Dense runtime tensors (Phase 2) are **contiguous row-major** `f32` buffers.
+Dense runtime tensors (Phase 2) are contiguous row-major `f32` buffers.
 GGUF may store quantized `ggml_type` blocks on disk; dequant into `Tensor`
 happens in Phase 5.
 
 ---
 
+
+
 ## Current progress
 
+
+
 ### Completed
+
+
 
 #### Phase 1
 
 - [x] Cargo library + binary, lint/format, errors, logging, docs
 
+
+
 #### Phase 2
 
 - [x] `tensor` module, reference kernels, Criterion benches
 
+
+
 #### Phase 3
 
-- [x] `gguf` module: magic/version validation, metadata KV (all value types)
-- [x] Tensor info directory + alignment / `data_offset`
-- [x] `GgufError` nested under `PhalanxError`
-- [x] Synthetic fixture builder + unit/integration tests
-- [x] Educational GGUF notes (`docs/gguf.md`)
+- [x] `gguf` module: magic/version validation, metadata KV, tensor info
+
+
+
+#### Phase 4
+
+- [x] `tokenizer` module: load vocab / scores / types / merges from GGUF
+- [x] Special tokens (bos/eos/unk/sep/pad)
+- [x] Decode (`▁` + `<0xXX>` rules) and encode (greedy / BPE)
+- [x] `TokenizerError` nested under `PhalanxError`
+- [x] Educational notes (`docs/tokenizer.md`)
+
+
 
 ### Known limitations
 
 - Weight blob is not read or `mmap`'d yet.
-- No tokenizer / vocab decoding from `tokenizer.ggml.*` keys.
+- Encode is a reference implementation (greedy / BPE) — not guaranteed HF parity.
 - Little-endian only (GGUF default); big-endian files are not detected.
-- Versions `2` and `3` accepted; version `1` rejected.
 - CLI cannot yet `inspect` a path — library API only.
+
+
 
 ### Next phase preview
 
-**Phase 4 — Vocabulary & tokenizer:** load tokenizer metadata from GGUF
-(or a side format), special tokens, encode/decode, tests. Unlocks prompt
-ingestion before weights land in Phase 5.
+**Phase 5 — Tensor / weight loading:** map or copy `tensor_data`, honour
+quantization metadata, materialize (or view) weights for the math layer.
 
 ---
+
+
 
 ## Roadmap
 
-| Phase | Focus |
-|---|---|
-| 1 | Repository foundation |
-| 2 | Tensor abstraction & ops |
-| **3** | GGUF header / metadata parser ← **you are here** |
-| 4 | Vocabulary & tokenizer |
-| 5 | Tensor / weight loading (+ mmap, quant metadata) |
-| 6 | Model config (Llama-style) |
-| 7–13 | Embeddings → RoPE → RMSNorm → FFN → Attention → KV cache → Decoder |
-| 14–16 | Sampling → streaming generation → full CLI |
-| 17–20 | Profiling → benchmarks → examples → docs polish |
 
-Full phase definitions live in [`AGENTS.md`](AGENTS.md).
+| Phase | Focus                                                              |
+| ----- | ------------------------------------------------------------------ |
+| 1     | Repository foundation                                              |
+| 2     | Tensor abstraction & ops                                           |
+| 3     | GGUF header / metadata parser                                      |
+| **4** | Vocabulary & tokenizer ← **we are here**                           |
+| 5     | Tensor / weight loading (+ mmap, quant metadata)                   |
+| 6     | Model config (Llama-style)                                         |
+| 7–13  | Embeddings → RoPE → RMSNorm → FFN → Attention → KV cache → Decoder |
+| 14–16 | Sampling → streaming generation → full CLI                         |
+| 17–20 | Profiling → benchmarks → examples → docs polish                    |
+
 
 ---
 
+
+
 ## Example usage
+
+
 
 ### Run the CLI
 
@@ -168,22 +203,21 @@ Full phase definitions live in [`AGENTS.md`](AGENTS.md).
 cargo run
 ```
 
-### Parse a GGUF header (library)
+
+
+### Parse GGUF + tokenize (library)
 
 ```rust
-use phalanx::GgufFile;
+use phalanx::{EncodeOptions, GgufFile, Tokenizer};
 
-fn inspect(path: &str) -> phalanx::Result<()> {
+fn prompt_ids(path: &str, text: &str) -> phalanx::Result<Vec<u32>> {
     let file = GgufFile::from_path(path)?;
-    println!("arch = {:?}", file.architecture());
-    println!("tensors = {}", file.header.tensor_count);
-    if let Some(t) = file.tensor("token_embd.weight") {
-        println!("{} {:?} @ relative {}", t.name, t.dimensions, t.offset);
-        println!("absolute offset = {}", file.absolute_offset(t)?);
-    }
-    Ok(())
+    let tok = Tokenizer::from_gguf(&file)?;
+    tok.encode(text, EncodeOptions::default())
 }
 ```
+
+
 
 ### Tensor API
 
@@ -199,6 +233,8 @@ fn demo() -> phalanx::Result<()> {
 }
 ```
 
+
+
 ### Benchmarks
 
 ```bash
@@ -207,12 +243,18 @@ cargo bench --bench tensor_ops
 
 ---
 
+
+
 ## Development instructions
+
+
 
 ### Prerequisites
 
 - Rust **1.85+** (stable), matching `rust-version` in `Cargo.toml`
 - `cargo`, `rustfmt`, `clippy` (via `rustup component add rustfmt clippy`)
+
+
 
 ### Build / test / lint / bench
 
@@ -224,7 +266,9 @@ cargo bench --bench tensor_ops
 cargo build --release
 ```
 
-### Project layout (Phase 3)
+
+
+### Project layout (Phase 4)
 
 ```text
 phalanx/
@@ -234,10 +278,11 @@ phalanx/
 │   ├── errors/          # typed PhalanxError
 │   ├── tensor/          # shape, dtype, storage, ops
 │   ├── gguf/            # GGUF container parser
+│   ├── tokenizer/       # vocab, specials, encode/decode
 │   └── utils/           # logging bootstrap
 ├── benches/             # Criterion microbenchmarks
 ├── tests/               # crate-boundary smoke tests
-├── docs/                # architecture, GGUF notes, implementation notes
+├── docs/                # architecture, GGUF, tokenizer notes
 ├── assets/              # reserved for fixtures / diagrams (no weights)
 ├── examples/            # reserved for Phase 19
 ├── AGENTS.md
@@ -248,19 +293,25 @@ phalanx/
 
 ---
 
+
+
 ## Implementation notes (summary)
 
-| Topic | Choice | Why |
-|---|---|---|
-| Library errors | `thiserror` → `PhalanxError` | Matchable API for embedders |
-| GGUF I/O | Streaming `Read` + byte cursor | Inspect multi-GB models without loading weights |
-| GGUF deps | No `byteorder` / `gguf` crate | Teach the format; keep the dependency surface tiny |
-| Tensor storage | Owned contiguous `Vec<f32>` | Teach layout; keep invariants simple |
-| Matmul | Naïve reference kernel | Correctness oracle before optimization |
+
+| Topic          | Choice                         | Why                                             |
+| -------------- | ------------------------------ | ----------------------------------------------- |
+| Library errors | `thiserror` → `PhalanxError`   | Matchable API for embedders                     |
+| GGUF I/O       | Streaming `Read` + byte cursor | Inspect multi-GB models without loading weights |
+| Tokenizer      | Hand-rolled greedy / BPE       | Teach encode/decode; avoid heavy HF deps        |
+| Tensor storage | Owned contiguous `Vec<f32>`    | Teach layout; keep invariants simple            |
+| Matmul         | Naïve reference kernel         | Correctness oracle before optimization          |
+
 
 More detail: [docs/implementation-notes.md](docs/implementation-notes.md).
 
 ---
+
+
 
 ## Educational preview (future README chapters)
 
@@ -268,13 +319,15 @@ As phases land, this README will expand into explanations of:
 
 - Why quantization matters for local inference
 - How decoder-only transformers execute token-by-token
-- How KV cache turns \(O(n^2)\) decode into \(O(n)\) per step
+- How KV cache turns O(n^2) decode into O(n) per step
 - The full execution pipeline beyond dense matmul
 - Performance considerations (threading, SIMD, flash-attention class kernels)
 
 GGUF motivation and layout: already sketched above and in [docs/gguf.md](docs/gguf.md).
 
 ---
+
+
 
 ## References
 
@@ -288,6 +341,8 @@ GGUF motivation and layout: already sketched above and in [docs/gguf.md](docs/gg
 - Golub & Van Loan, *Matrix Computations*
 
 ---
+
+
 
 ## License
 

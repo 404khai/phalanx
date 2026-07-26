@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Phase 4 tokenizer: [`tokenizer`](src/tokenizer/) module loading vocab /
+  specials from GGUF metadata, with encode (greedy / BPE) and decode
+  (`▁` / `<0xXX>`), plus nested [`TokenizerError`](src/tokenizer/error.rs).
+- Educational tokenizer notes in [`docs/tokenizer.md`](docs/tokenizer.md).
 - Phase 3 GGUF parser: [`gguf`](src/gguf/) module with streaming header,
   metadata KV (all value types), tensor info directory, alignment /
   `data_offset`, and nested [`GgufError`](src/gguf/error.rs).

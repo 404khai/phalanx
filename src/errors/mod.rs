@@ -19,6 +19,7 @@ use thiserror::Error;
 
 use crate::gguf::GgufError;
 use crate::tensor::TensorError;
+use crate::tokenizer::TokenizerError;
 
 /// Convenient alias for fallible library operations.
 pub type Result<T> = std::result::Result<T, PhalanxError>;
@@ -44,6 +45,10 @@ pub enum PhalanxError {
     /// GGUF container parse / validation failure.
     #[error(transparent)]
     Gguf(#[from] GgufError),
+
+    /// Vocabulary / encode / decode failure.
+    #[error(transparent)]
+    Tokenizer(#[from] TokenizerError),
 
     /// Unexpected internal invariant violation.
     ///
