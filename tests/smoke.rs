@@ -4,8 +4,8 @@
 //! refactors that break re-exports fail loudly.
 
 use phalanx::{
-    EncodeOptions, GgmlType, GgufError, GgufFile, PhalanxError, RUNTIME_NAME, Shape, SpecialTokens,
-    Tensor, TensorError, Tokenizer, TokenizerModel, VERSION, Vocabulary,
+    EncodeOptions, GgmlType, GgufError, GgufFile, PhalanxError, QuantMeta, RUNTIME_NAME, Shape,
+    SpecialTokens, Tensor, TensorError, Tokenizer, TokenizerModel, VERSION, Vocabulary,
 };
 
 #[test]
@@ -59,6 +59,14 @@ fn gguf_rejects_bad_magic_across_crate_boundary() {
 #[test]
 fn gguf_type_names_are_exported() {
     assert_eq!(GgmlType::Q4K.name(), "q4_k");
+}
+
+#[test]
+fn quant_meta_q4k_is_exported() {
+    let meta = QuantMeta::for_type(GgmlType::Q4K).unwrap();
+    assert_eq!(meta.block_size, 256);
+    assert_eq!(meta.type_size, 144);
+    assert!(meta.is_quantized);
 }
 
 #[test]

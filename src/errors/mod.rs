@@ -20,6 +20,7 @@ use thiserror::Error;
 use crate::gguf::GgufError;
 use crate::tensor::TensorError;
 use crate::tokenizer::TokenizerError;
+use crate::weights::WeightsError;
 
 /// Convenient alias for fallible library operations.
 pub type Result<T> = std::result::Result<T, PhalanxError>;
@@ -49,6 +50,10 @@ pub enum PhalanxError {
     /// Vocabulary / encode / decode failure.
     #[error(transparent)]
     Tokenizer(#[from] TokenizerError),
+
+    /// Weight mmap / bounds / materialization failure.
+    #[error(transparent)]
+    Weights(#[from] WeightsError),
 
     /// Unexpected internal invariant violation.
     ///
