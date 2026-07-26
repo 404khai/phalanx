@@ -1,0 +1,5 @@
+# Shared cargo defaults for contributors. Clippy denials keep the tree
+# warning-clean without requiring every developer to remember flags.
+[alias]
+lint = "clippy --all-targets --all-features -- -D warnings"
+check-all = "clippy --all-targets --all-features -- -D warnings"
