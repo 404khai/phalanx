@@ -1,6 +1,6 @@
 //! Phalanx CLI entrypoint.
 //!
-//! Phase 3 still ships a thin binary: logging init + version banner. A real
+//! Phase 4 still ships a thin binary: logging init + version banner. A real
 //! `inspect` / `generate` CLI lands in Phase 16 — keeping `main` small avoids
 //! baking a framework choice before command requirements are clear.
 
@@ -15,9 +15,9 @@ fn main() -> Result<()> {
     info!(version = VERSION, "{RUNTIME_NAME} starting");
 
     println!("{RUNTIME_NAME} v{VERSION}");
-    println!("Phase 3 — GGUF header/metadata parser ready; vocab + weight load next.");
+    println!("Phase 4 — tokenizer ready; weight loading (mmap/dequant) comes next.");
     println!("Set RUST_LOG=phalanx=debug for verbose diagnostics.");
-    println!("Parse a file from library code with: GgufFile::from_path(\"model.gguf\")");
+    println!("Load a tokenizer with: Tokenizer::from_gguf(&GgufFile::from_path(...)? )?");
 
     Ok(())
 }

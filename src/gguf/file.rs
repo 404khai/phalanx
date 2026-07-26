@@ -324,13 +324,19 @@ fn read_tensor_info<R: Read>(reader: &mut GgufReader<R>, alignment: u64) -> Resu
 #[allow(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
-    clippy::unwrap_used
+    clippy::unwrap_used,
+    clippy::must_use_candidate,
+    clippy::return_self_not_must_use,
+    clippy::new_without_default,
+    dead_code,
+    missing_docs
 )]
-pub(super) mod test_support {
+pub mod test_support {
     use super::*;
     use crate::gguf::types::MetadataValueType;
 
-    pub(crate) struct GgufBuilder {
+    /// Builder for tiny in-memory GGUF fixtures.
+    pub struct GgufBuilder {
         version: u32,
         metadata: Vec<(String, MetadataValue)>,
         tensors: Vec<TensorInfo>,
@@ -338,7 +344,8 @@ pub(super) mod test_support {
     }
 
     impl GgufBuilder {
-        pub(crate) fn new() -> Self {
+        /// Start an empty version-3 container.
+        pub fn new() -> Self {
             Self {
                 version: 3,
                 metadata: Vec::new(),
@@ -347,29 +354,34 @@ pub(super) mod test_support {
             }
         }
 
-        pub(crate) fn architecture(mut self, arch: &str) -> Self {
+        /// Set `general.architecture`.
+        pub fn architecture(mut self, arch: &str) -> Self {
             self.metadata
                 .push((ARCHITECTURE_KEY.into(), MetadataValue::String(arch.into())));
             self
         }
 
-        pub(crate) fn name(mut self, name: &str) -> Self {
+        /// Set `general.name`.
+        pub fn name(mut self, name: &str) -> Self {
             self.metadata
                 .push((NAME_KEY.into(), MetadataValue::String(name.into())));
             self
         }
 
-        pub(crate) fn alignment(mut self, alignment: u32) -> Self {
+        /// Set `general.alignment`.
+        pub fn alignment(mut self, alignment: u32) -> Self {
             self.alignment = Some(alignment);
             self
         }
 
-        pub(crate) fn meta_u32(mut self, key: &str, value: u32) -> Self {
+        /// Push a `u32` metadata value.
+        pub fn meta_u32(mut self, key: &str, value: u32) -> Self {
             self.metadata.push((key.into(), MetadataValue::U32(value)));
             self
         }
 
-        pub(crate) fn meta_array_u32(mut self, key: &str, values: &[u32]) -> Self {
+        /// Push a `u32` array metadata value.
+        pub fn meta_array_u32(mut self, key: &str, values: &[u32]) -> Self {
             self.metadata.push((
                 key.into(),
                 MetadataValue::Array(super::super::value::MetadataArray {
@@ -380,12 +392,60 @@ pub(super) mod test_support {
             self
         }
 
-        pub(crate) fn tensor(mut self, info: TensorInfo) -> Self {
+        /// Push a string metadata value.
+        pub fn meta_string(mut self, key: &str, value: &str) -> Self {
+            self.metadata
+                .push((key.into(), MetadataValue::String(value.into())));
+            self
+        }
+
+        /// Push a string-array metadata value.
+        pub fn meta_array_string(mut self, key: &str, values: &[&str]) -> Self {
+            self.metadata.push((
+                key.into(),
+                MetadataValue::Array(super::super::value::MetadataArray {
+                    element_type: MetadataValueType::String,
+                    values: values
+                        .iter()
+                        .map(|s| MetadataValue::String((*s).into()))
+                        .collect(),
+                }),
+            ));
+            self
+        }
+
+        /// Push an `i32` array metadata value.
+        pub fn meta_array_i32(mut self, key: &str, values: &[i32]) -> Self {
+            self.metadata.push((
+                key.into(),
+                MetadataValue::Array(super::super::value::MetadataArray {
+                    element_type: MetadataValueType::I32,
+                    values: values.iter().copied().map(MetadataValue::I32).collect(),
+                }),
+            ));
+            self
+        }
+
+        /// Push an `f32` array metadata value.
+        pub fn meta_array_f32(mut self, key: &str, values: &[f32]) -> Self {
+            self.metadata.push((
+                key.into(),
+                MetadataValue::Array(super::super::value::MetadataArray {
+                    element_type: MetadataValueType::F32,
+                    values: values.iter().copied().map(MetadataValue::F32).collect(),
+                }),
+            ));
+            self
+        }
+
+        /// Append a tensor info record.
+        pub fn tensor(mut self, info: TensorInfo) -> Self {
             self.tensors.push(info);
             self
         }
 
-        pub(crate) fn build(self) -> Vec<u8> {
+        /// Serialize to GGUF bytes (header + metadata + tensor infos only).
+        pub fn build(self) -> Vec<u8> {
             let mut out = Vec::new();
             out.extend_from_slice(&GGUF_MAGIC);
             out.extend_from_slice(&self.version.to_le_bytes());

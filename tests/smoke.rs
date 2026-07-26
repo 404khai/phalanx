@@ -4,7 +4,8 @@
 //! refactors that break re-exports fail loudly.
 
 use phalanx::{
-    GgmlType, GgufError, GgufFile, PhalanxError, RUNTIME_NAME, Shape, Tensor, TensorError, VERSION,
+    EncodeOptions, GgmlType, GgufError, GgufFile, PhalanxError, RUNTIME_NAME, Shape, SpecialTokens,
+    Tensor, TensorError, Tokenizer, TokenizerModel, VERSION, Vocabulary,
 };
 
 #[test]
@@ -58,4 +59,26 @@ fn gguf_rejects_bad_magic_across_crate_boundary() {
 #[test]
 fn gguf_type_names_are_exported() {
     assert_eq!(GgmlType::Q4K.name(), "q4_k");
+}
+
+#[test]
+fn tokenizer_encode_decode_round_trip_across_crate_boundary() {
+    let vocab = Vocabulary::new(vec!["▁hi".into(), "!".into()], None, None).unwrap();
+    let tok = Tokenizer::from_parts(
+        TokenizerModel::Llama,
+        vocab,
+        SpecialTokens::default(),
+        Vec::new(),
+    );
+    let ids = tok
+        .encode(
+            "hi!",
+            EncodeOptions {
+                add_bos: false,
+                add_eos: false,
+            },
+        )
+        .unwrap();
+    assert_eq!(ids, vec![0, 1]);
+    assert_eq!(tok.decode(&ids).unwrap(), " hi!");
 }

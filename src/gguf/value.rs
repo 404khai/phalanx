@@ -87,6 +87,33 @@ impl MetadataValue {
             _ => None,
         }
     }
+
+    /// Copy as `i32` when the value is a signed 32-bit integer.
+    #[must_use]
+    pub fn as_i32(&self) -> Option<i32> {
+        match self {
+            Self::I32(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    /// Copy as `f32` when the value is a 32-bit float.
+    #[must_use]
+    pub fn as_f32(&self) -> Option<f32> {
+        match self {
+            Self::F32(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    /// Borrow the array payload when this is an array value.
+    #[must_use]
+    pub fn as_array(&self) -> Option<&MetadataArray> {
+        match self {
+            Self::Array(array) => Some(array),
+            _ => None,
+        }
+    }
 }
 
 /// Array metadata payload.
