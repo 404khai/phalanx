@@ -1,4 +1,4 @@
-# Architecture — Phase 5
+# Architecture — Phase 7
 
 This document tracks architectural intent as Phalanx grows. Update it every
 phase; the README embeds a summary diagram for quick reading.
@@ -10,7 +10,7 @@ phase; the README embeds a summary diagram for quick reading.
 - **Incremental completeness** — each phase ships a compiling, tested slice.
 - **Educational clarity** — diagrams and notes explain *why*, not only *what*.
 
-## Phase 5 component map
+## Phase 7 component map
 
 ```mermaid
 flowchart TB
@@ -20,8 +20,8 @@ flowchart TB
     gguf["gguf::GgufFile"]
     tok["tokenizer::Tokenizer"]
     weights["weights::WeightSet"]
-    storage["WeightStorage<br/>mmap | owned"]
-    quant["QuantMeta"]
+    model["model::ModelConfig"]
+    layers["layers::EmbeddingTable"]
     tensor["tensor::Tensor"]
 
     main --> lib
@@ -29,34 +29,40 @@ flowchart TB
     lib --> gguf
     lib --> tok
     lib --> weights
+    lib --> model
+    lib --> layers
     lib --> tensor
     tok --> gguf
     weights --> gguf
-    weights --> storage
-    weights --> quant
+    model --> gguf
+    layers --> weights
+    layers --> model
+    layers --> tensor
     weights --> tensor
-    weights --> errors
 ```
 
 ### Responsibilities
 
-| Component | Responsibility | Non-goals (Phase 5) |
+| Component | Responsibility | Non-goals (Phase 7) |
 |---|---|---|
 | `gguf` | Parse directory / metadata | Own the byte map |
 | `weights` | mmap, bounds check, dense materialize | Full Q4_K dequant kernels |
 | `tokenizer` | Vocab encode/decode | Chat templates |
+| `model` | Architecture + validated hparams | Execute layers |
+| `layers` | Embedding gather (more kernels later) | RoPE / attention / FFN |
 | `tensor` | Contiguous f32 math | On-disk layout |
 
-## Weight load pipeline
+## Embedding load pipeline
 
 ```mermaid
 flowchart LR
-    Path["model.gguf"] --> Mmap["memmap2 read-only"]
-    Mmap --> Parse["GgufFile::from_bytes"]
-    Parse --> Meta["QuantMeta per tensor"]
-    Meta --> Span["validate [abs, abs+nbytes)"]
-    Span --> View["WeightTensor view"]
-    View --> Dense["to_f32_tensor<br/>f32/f16 only"]
+    W["WeightSet"] --> T["token_embd.weight"]
+    C["ModelConfig"] --> V["shape checks"]
+    T --> M["f32/f16 materialize"]
+    M --> R["reinterpret [vocab, embd]"]
+    V --> R
+    R --> E["EmbeddingTable"]
+    E --> G["forward / gather"]
 ```
 
 ## Boundary rules
@@ -67,6 +73,8 @@ flowchart LR
 4. **`unsafe` only in `weights::storage`** for `memmap2::map`, with safety docs.
 5. **Tokenizer reads only metadata** — weights module owns file bytes.
 6. **Quantized payloads stay as `&[u8]`** until a kernel needs dequant.
+7. **Layers read shapes from `ModelConfig`**, not raw metadata maps.
+8. **ggml dimension order is reinterpreted explicitly** at layer boundaries.
 
 ## Module ownership
 
@@ -75,24 +83,25 @@ flowchart LR
 | `tensor` | Contiguous buffers, shapes, ops | Phase 2 |
 | `gguf` | Header, metadata, tensor info | Phase 3 |
 | `tokenizer` | Vocab, specials, encode/decode | Phase 4 |
-| `weights` | mmap, quant meta, materialize | **Phase 5** |
-| `model` | Config + named weight binds | Phase 6 |
+| `weights` | mmap, quant meta, materialize | Phase 5 |
+| `model` | Architecture + hyperparameters | Phase 6 |
+| `layers` | Embedding (+ future kernels) | **Phase 7** |
 
 ## Tradeoffs recorded
 
-### mmap vs owned copy
+### Reinterpret vs transpose-copy
 
 | Option | Pros | Cons |
 |---|---|---|
-| **mmap (chosen)** | Scales to large GGUF files | Reviewed `unsafe` call |
-| Owned `Vec` | No `unsafe` | Impractical for big models |
+| **Reinterpret `[vocab, embd]` (chosen)** | Zero copy; matches ggml bytes | Callers must understand ggml order |
+| Explicit transpose into new buffer | “Obvious” PyTorch layout | Wasteful bandwidth on huge vocabs |
 
-### Dequant now vs later
+### `layers` module vs stuffing into `model`
 
 | Option | Pros | Cons |
 |---|---|---|
-| **Metadata + views now (chosen)** | Unblocks config / wiring | Can't run Q4_K matmul yet |
-| Full dequant in Phase 5 | Instant f32 weights | Huge scope; duplicates future kernels |
+| **`layers` (chosen)** | Room for RoPE / attn / FFN | Extra module |
+| Everything under `model` | Fewer top-level mods | Mixes hparams with kernels |
 
 ## Evolution policy
 

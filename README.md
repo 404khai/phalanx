@@ -3,13 +3,16 @@
 A high-performance, educational inference runtime for modern decoder-only
 language models — written in Rust, starting with **GGUF** weights.
 
+This repository root **is** Phalanx Runtime (the Rust crate). The monorepo also
+contains [`odyssey/`](odyssey/) for related ML research work.
+
 Phalanx is built to be both:
 
 1. a **production-minded systems codebase** (correctness, structure, performance), and
 2. a **mini textbook** for how LLM inference actually works under the hood.
 
-> Status: **Phase 5 complete** — mmap weight loading + quantization metadata.
-> Dense `f32`/`f16` materialize; block dequant kernels come with later layers.
+> Status: **Phase 7 complete** — token `EmbeddingTable` gather from GGUF weights.
+> Rotary embeddings (`RoPE`) come next.
 
 ---
 
@@ -24,8 +27,10 @@ Eventually Phalanx should support:
 | GGUF weight loading (`mmap` / quant meta) | **Phase 5**          |
 | Tokenization & vocabulary               | Phase 4                |
 | Tensor abstraction & ops                | Phase 2                |
-| Quantized tensors (metadata / views)    | **Phase 5** (dequant later) |
-| Decoder-only transformers               | Planned (Phase 6–13)   |
+| Quantized tensors (metadata / views)    | Phase 5 (dequant later) |
+| Model config (Llama hparams)            | Phase 6                |
+| Token embedding gather                  | **Phase 7**            |
+| Decoder-only transformers               | Planned (Phase 8–13)   |
 | RMSNorm / RoPE / Attention / KV cache   | Planned (Phases 8–12)  |
 | Sampling (greedy, temp, top-k/p, min-p) | Planned (Phase 14)     |
 | Streaming generation                    | Planned (Phase 15)     |
@@ -39,7 +44,7 @@ Eventually Phalanx should support:
 
 
 
-## Architecture (Phase 5)
+## Architecture (Phase 7)
 
 ```mermaid
 flowchart TB
@@ -54,11 +59,12 @@ flowchart TB
         GGUF["gguf::GgufFile"]
         Tok["tokenizer::Tokenizer"]
         Weights["weights::WeightSet"]
-        Quant["QuantMeta"]
+        Model["model::ModelConfig"]
+        Emb["layers::EmbeddingTable"]
     end
 
     subgraph future [Future phases]
-        Model["model / decoder"]
+        Decoder["RoPE / norm / attn / FFN / decoder"]
     end
 
     CLI --> API
@@ -67,16 +73,21 @@ flowchart TB
     API --> GGUF
     API --> Tok
     API --> Weights
+    API --> Model
+    API --> Emb
     Tok --> GGUF
     Weights --> GGUF
-    Weights --> Quant
+    Model --> GGUF
+    Emb --> Weights
+    Emb --> Model
+    Emb --> Tensor
     Weights --> Tensor
-    Weights -.-> Model
-    Model -.-> Tok
+    Emb -.-> Decoder
 ```
 
 See [docs/architecture.md](docs/architecture.md), [docs/gguf.md](docs/gguf.md),
-[docs/tokenizer.md](docs/tokenizer.md), and [docs/weights.md](docs/weights.md).
+[docs/tokenizer.md](docs/tokenizer.md), [docs/weights.md](docs/weights.md),
+[docs/model.md](docs/model.md), and [docs/embeddings.md](docs/embeddings.md).
 
 ---
 
@@ -142,8 +153,23 @@ Block dequant kernels arrive with later layer work.
 - [x] Materialize dense `f32` / `f16` → `Tensor`
 - [x] Reviewed `unsafe` island solely for `memmap2`
 
+#### Phase 6
+
+- [x] `model` module: `Architecture::Llama`, `ModelConfig::from_gguf`
+- [x] Attention / RoPE / RMSNorm ε hyperparameters + GQA helpers
+- [x] Structural validation (head dims, GQA ratio, RoPE parity)
+- [x] Defaults for missing `head_count_kv` and `rope.freq_base`
+
+#### Phase 7
+
+- [x] `layers` module: `EmbeddingTable::from_weights` / `forward`
+- [x] Bind `token_embd.weight` with ggml → `[vocab, embd]` reinterpret
+- [x] Config shape checks + trailing-`1` dim squeeze
+
 ### Known limitations
 
+- Only `general.architecture = "llama"` is configured (others rejected).
+- Embedding gather requires dense `f32`/`f16` materialization (no quant dequant yet).
 - Quantized types are viewable as bytes but not yet dequantized to `f32`.
 - Encode is a reference implementation (greedy / BPE), not guaranteed HF parity.
 - Little-endian only (GGUF default).
@@ -152,8 +178,8 @@ Block dequant kernels arrive with later layer work.
 
 ### Next phase preview
 
-**Phase 6 — Model configuration:** Llama-style hyperparameters and transformer
-config parsed from GGUF metadata, ready to bind weights to named layers.
+**Phase 8 — Rotary embeddings:** apply RoPE to Q/K using `ModelConfig` rope
+hparams.
 
 ---
 
@@ -166,9 +192,10 @@ config parsed from GGUF metadata, ready to bind weights to named layers.
 | 2     | Tensor abstraction & ops                                           |
 | 3     | GGUF header / metadata parser                                      |
 | 4     | Vocabulary & tokenizer                                             |
-| **5** | Tensor / weight loading (+ mmap, quant metadata) ← **you are here** |
+| 5     | Tensor / weight loading (+ mmap, quant metadata)                   |
 | 6     | Model config (Llama-style)                                         |
-| 7–13  | Embeddings → RoPE → RMSNorm → FFN → Attention → KV cache → Decoder |
+| **7** | Embedding layer ← **you are here**                                 |
+| 8–13  | RoPE → RMSNorm → FFN → Attention → KV cache → Decoder              |
 | 14–16 | Sampling → streaming generation → full CLI                         |
 | 17–20 | Profiling → benchmarks → examples → docs polish                    |
 
@@ -209,6 +236,30 @@ use phalanx::WeightSet;
 fn load_dense(path: &str, name: &str) -> phalanx::Result<phalanx::Tensor> {
     let weights = WeightSet::open_mmap(path)?;
     weights.tensor(name)?.to_f32_tensor()
+}
+```
+
+### Model config (library)
+
+```rust
+use phalanx::{GgufFile, ModelConfig};
+
+fn load_hparams(path: &str) -> phalanx::Result<ModelConfig> {
+    let file = GgufFile::from_path(path)?;
+    ModelConfig::from_gguf(&file)
+}
+```
+
+### Embedding gather (library)
+
+```rust
+use phalanx::{EmbeddingTable, ModelConfig, WeightSet};
+
+fn embed(path: &str, ids: &[u32]) -> phalanx::Result<phalanx::Tensor> {
+    let weights = WeightSet::open_mmap(path)?;
+    let config = ModelConfig::from_gguf(weights.gguf())?;
+    let table = EmbeddingTable::from_weights(&weights, &config)?;
+    table.forward(ids)
 }
 ```
 
@@ -263,7 +314,7 @@ cargo build --release
 
 
 
-### Project layout (Phase 5)
+### Project layout (Phase 7)
 
 ```text
 phalanx/
@@ -275,10 +326,12 @@ phalanx/
 │   ├── gguf/            # GGUF container parser
 │   ├── tokenizer/       # vocab, specials, encode/decode
 │   ├── weights/         # mmap, quant metadata, materialize
+│   ├── model/           # architecture + transformer config
+│   ├── layers/          # embedding (+ future kernels)
 │   └── utils/           # logging bootstrap
 ├── benches/             # Criterion microbenchmarks
 ├── tests/               # crate-boundary smoke tests
-├── docs/                # architecture, GGUF, tokenizer, weights notes
+├── docs/                # architecture, GGUF, tokenizer, weights, model, embeddings
 ├── assets/              # reserved for fixtures / diagrams (no weights)
 ├── examples/            # reserved for Phase 19
 ├── AGENTS.md
@@ -297,6 +350,8 @@ phalanx/
 | Library errors | `thiserror` → `PhalanxError`   | Matchable API for embedders                     |
 | GGUF I/O       | Streaming `Read` + byte cursor | Inspect multi-GB models without loading weights |
 | Weight I/O     | `memmap2` read-only map        | Open multi-GB checkpoints without copying       |
+| Model config   | Llama-only validated struct    | Honest scope; layers share one hparam source    |
+| Embeddings     | Reinterpret ggml layout        | Zero-copy gather; teach ne[0]-innermost order   |
 | Tokenizer      | Hand-rolled greedy / BPE       | Teach encode/decode; avoid heavy HF deps        |
 | Tensor storage | Owned contiguous `Vec<f32>`    | Teach layout; keep invariants simple            |
 | Matmul         | Naïve reference kernel         | Correctness oracle before optimization          |
@@ -317,8 +372,9 @@ As phases land, this README will expand into explanations of:
 - The full execution pipeline beyond dense matmul
 - Performance considerations (threading, SIMD, flash-attention class kernels)
 
-GGUF / tokenizer / weights notes: [docs/gguf.md](docs/gguf.md),
-[docs/tokenizer.md](docs/tokenizer.md), [docs/weights.md](docs/weights.md).
+Subsystem notes: [docs/gguf.md](docs/gguf.md),
+[docs/tokenizer.md](docs/tokenizer.md), [docs/weights.md](docs/weights.md),
+[docs/model.md](docs/model.md), [docs/embeddings.md](docs/embeddings.md).
 
 ---
 

@@ -1,6 +1,6 @@
 //! Phalanx CLI entrypoint.
 //!
-//! Phase 5 still ships a thin binary: logging init + version banner. A real
+//! Phase 7 still ships a thin binary: logging init + version banner. A real
 //! `inspect` / `generate` CLI lands in Phase 16 — keeping `main` small avoids
 //! baking a framework choice before command requirements are clear.
 
@@ -15,9 +15,9 @@ fn main() -> Result<()> {
     info!(version = VERSION, "{RUNTIME_NAME} starting");
 
     println!("{RUNTIME_NAME} v{VERSION}");
-    println!("Phase 5 — weight mmap + quant metadata ready; model config next.");
+    println!("Phase 7 — token embedding gather; RoPE next.");
     println!("Set RUST_LOG=phalanx=debug for verbose diagnostics.");
-    println!("Load weights with: WeightSet::open_mmap(\"model.gguf\")?");
+    println!("Load embeddings with: EmbeddingTable::from_weights(&weights, &config)?");
 
     Ok(())
 }

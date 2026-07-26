@@ -275,7 +275,6 @@ kernel changes as signal, not absolute SLA yet.
 ### Follow-ups deferred
 
 - Q4_0 / Q4_K / Q8_0 dequant → layer kernels
-- Model config binding named tensors → Phase 6
 - CLI `inspect` → Phase 16
 
 ### References used this phase
@@ -283,3 +282,109 @@ kernel changes as signal, not absolute SLA yet.
 - [GGUF specification](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md)
 - [llama.cpp / ggml quant blocks](https://github.com/ggml-org/llama.cpp)
 - [memmap2](https://docs.rs/memmap2)
+
+---
+
+## Phase 6 — Model configuration
+
+### Scope delivered
+
+- `model` module: `Architecture`, `ModelConfig`, attention / RoPE sub-configs
+- Parse Llama `{arch}.*` hyperparameters from GGUF metadata
+- Structural validation (GQA divisibility, head×dim = embd, RoPE parity, …)
+- Defaults: `head_count_kv → head_count`, `rope.freq_base → 10000`
+- Legacy `rope.scale` → linear `RopeScaling`
+- `PhalanxError::Model` nesting
+- Docs: `docs/model.md`
+
+### Decision log
+
+#### 1. Llama-only architecture enum
+
+**Pros:** Honest scope; validation tuned to Llama invariants.
+**Cons:** `qwen2` / others fail with `UnsupportedArchitecture`.
+**Reason:** Phase 6 is “Llama architecture”; multi-arch lands when kernels do.
+
+#### 2. Accept u32 **or** u64 counts
+
+**Pros:** Matches real GGUF writers / GGUF spec (`uint64` counts).
+**Cons:** Slightly wider parse path.
+**Reason:** Rejecting u64 would break valid files.
+
+#### 3. Config does not bind weights yet
+
+**Pros:** Clear boundary; Phase 7 owns embedding + named tensors.
+**Cons:** Two-step load for callers (`ModelConfig` + `WeightSet`).
+**Reason:** Avoid half-wired layer graphs before embeddings exist.
+
+### Testing strategy (Phase 6)
+
+| Layer | Location | Covers |
+|---|---|---|
+| Unit | `model::*` | Llama 7B-style, GQA, u64 counts, bad GQA, legacy rope.scale |
+| Integration | `tests/smoke.rs` | nested `ModelError` re-export |
+
+### Follow-ups deferred
+
+- Qwen2 / Phi / MoE architecture variants
+- Cross-check `vocab_size` vs tokenizer length → when both load together
+
+### References used this phase
+
+- [LLaMA](https://arxiv.org/abs/2302.13971)
+- [GGUF specification](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md)
+- [RoFormer](https://arxiv.org/abs/2104.09864)
+- llama.cpp `gguf-py/gguf/constants.py`
+
+---
+
+## Phase 7 — Embedding layer
+
+### Scope delivered
+
+- `layers` module: `EmbeddingTable`, `LayersError`, `TOKEN_EMBD_WEIGHT`
+- Load `token_embd.weight`, validate against `ModelConfig`
+- Reinterpret ggml `[n_embd, n_vocab]` bytes as row-major `[vocab, embd]`
+- `forward` / `forward_one` gather
+- Squeeze trailing unitary dims
+- Docs: `docs/embeddings.md`
+
+### Decision log
+
+#### 1. New `layers` module (not under `model`)
+
+**Pros:** Keeps hparams separate from kernels; RoPE/attn/FFN land nearby.
+**Cons:** Extra top-level module.
+**Reason:** Phase 8–11 are all layer kernels.
+
+#### 2. Reinterpret shape instead of transpose-copy
+
+**Pros:** Zero-copy on multi-GB embedding matrices.
+**Cons:** Easy to get wrong without the ggml-order comment.
+**Reason:** Educational runtime should teach the layout, not hide a silent copy.
+
+#### 3. Dense-only embeddings in Phase 7
+
+**Pros:** Uses existing `to_f32_tensor`; scope stays focused.
+**Cons:** Quantized GGUF embeddings still fail materialize.
+**Reason:** Dequant belongs with the first kernel that needs blocks at scale;
+gather correctness is the Phase 7 deliverable.
+
+### Testing strategy (Phase 7)
+
+| Layer | Location | Covers |
+|---|---|---|
+| Unit | `layers::embedding` | GGUF fixture gather, trailing ones, OOR, missing weight |
+| Integration | `tests/smoke.rs` | public gather + nested `LayersError` |
+
+### Follow-ups deferred
+
+- Quantized embedding dequant
+- Tied `output.weight` / input embeddings
+- Absolute position embeddings (Llama uses RoPE → Phase 8)
+
+### References used this phase
+
+- [LLaMA](https://arxiv.org/abs/2302.13971)
+- [GGUF specification](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md)
+- llama.cpp `TOKEN_EMBD` naming
