@@ -1,0 +1,41 @@
+[package]
+name = "phalanx"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Phalanx Runtime — a high-performance, educational LLM inference engine"
+license = "MIT"
+readme = "README.md"
+keywords = ["llm", "inference", "gguf", "transformer", "runtime"]
+categories = ["science", "parsing"]
+repository = "https://github.com/phalanx-runtime/phalanx"
+
+[dependencies]
+anyhow = "1.0.104"
+half = "2.7.1"
+memmap2 = "0.9.11"
+thiserror = "2.0.19"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+
+[lints.rust]
+# `deny` (not `forbid`) so a reviewed module can opt in with `#[allow(unsafe_code)]`.
+# Phase 5: only `weights::storage` may use `unsafe`, for `memmap2` mapping.
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# Module-level docs already cover intent; forcing every item is noise at this stage.
+module_name_repetitions = "allow"
+# Binary and tests legitimately print status lines before structured logging is wired.
+print_stdout = "allow"
+print_stderr = "allow"
+
+[dev-dependencies]
+criterion = { version = "0.7.0", features = ["html_reports"] }
+
+[[bench]]
+name = "tensor_ops"
+harness = false
