@@ -2,27 +2,29 @@
 /target/
 **/*.rs.bk
 # Cargo.lock is committed: this package ships a binary runtime.
-
 # Editor / OS noise
 .idea/
 .vscode/
 *.swp
 *.swo
 .DS_Store
-
 # Local model weights and large binaries (never commit)
 *.gguf
 *.bin
 *.safetensors
 /assets/models/
-
 # Profiling / coverage output
 *.profraw
 *.profdata
 /coverage/
 lcov.info
-
 # Environment overrides
 .env
 .env.*
 AGENTS.md
+# Monorepo / Odyssey (Python)
+**/.DS_Store
+**/__pycache__/
+**/*.egg-info/
+.venv/
+venv/

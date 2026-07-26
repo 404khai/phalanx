@@ -3,9 +3,8 @@
 //! A high-performance, educational inference runtime for decoder-only
 //! language models, beginning with GGUF-format weights.
 //!
-//! Phase 5 adds [`weights::WeightSet`]: memory-map a GGUF file, resolve each
-//! tensor's byte span via quantization metadata, and materialize dense
-//! `f32` / `f16` payloads into [`tensor::Tensor`].
+//! Phase 7 adds [`layers::EmbeddingTable`]: gather token activations from
+//! GGUF `token_embd.weight`, validated against [`model::ModelConfig`].
 //!
 //! # Crate layout
 //!
@@ -14,12 +13,16 @@
 //! - [`gguf`] — GGUF container parse
 //! - [`tokenizer`] — vocab, special tokens, encode / decode
 //! - [`weights`] — mmap + quant metadata + dense materialization
+//! - [`model`] — architecture + transformer config
+//! - [`layers`] — embedding (and future `RoPE` / norm / attention / `FFN`)
 //! - [`utils`] — cross-cutting helpers (logging today; more later)
 
 #![doc(html_root_url = "https://docs.rs/phalanx/0.1.0")]
 
 pub mod errors;
 pub mod gguf;
+pub mod layers;
+pub mod model;
 pub mod tensor;
 pub mod tokenizer;
 pub mod utils;
@@ -27,6 +30,8 @@ pub mod weights;
 
 pub use errors::{PhalanxError, Result};
 pub use gguf::{GgmlType, GgufError, GgufFile, GgufHeader, MetadataValue, TensorInfo};
+pub use layers::{EmbeddingTable, LayersError, TOKEN_EMBD_WEIGHT};
+pub use model::{Architecture, AttentionConfig, ModelConfig, ModelError, RopeConfig, RopeScaling};
 pub use tensor::{DType, Shape, Tensor, TensorError};
 pub use tokenizer::{
     DecodeOptions, EncodeOptions, SpecialTokens, Tokenizer, TokenizerError, TokenizerModel,

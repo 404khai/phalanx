@@ -42,6 +42,7 @@ It succeeds earlier GGML/GGMF/GGJT layouts. Authoritative spec:
 | Weight bytes / mmap / quant meta | ✅ Phase 5 (`weights` module) |
 | Block dequant → f32 | ❌ later (layer kernels) |
 | Vocabulary / tokenizer | ✅ Phase 4 (`tokenizer` module) |
+| Model hyperparameters | ✅ Phase 6 (`model` module) |
 
 ## Common metadata keys
 

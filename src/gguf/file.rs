@@ -380,6 +380,18 @@ pub mod test_support {
             self
         }
 
+        /// Push a `u64` metadata value.
+        pub fn meta_u64(mut self, key: &str, value: u64) -> Self {
+            self.metadata.push((key.into(), MetadataValue::U64(value)));
+            self
+        }
+
+        /// Push an `f32` metadata value.
+        pub fn meta_f32(mut self, key: &str, value: f32) -> Self {
+            self.metadata.push((key.into(), MetadataValue::F32(value)));
+            self
+        }
+
         /// Push a `u32` array metadata value.
         pub fn meta_array_u32(mut self, key: &str, values: &[u32]) -> Self {
             self.metadata.push((
