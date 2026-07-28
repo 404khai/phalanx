@@ -1,4 +1,4 @@
-# Architecture — Phase 7
+# Architecture — Phase 8
 
 This document tracks architectural intent as Phalanx grows. Update it every
 phase; the README embeds a summary diagram for quick reading.
@@ -10,7 +10,7 @@ phase; the README embeds a summary diagram for quick reading.
 - **Incremental completeness** — each phase ships a compiling, tested slice.
 - **Educational clarity** — diagrams and notes explain *why*, not only *what*.
 
-## Phase 7 component map
+## Phase 8 component map
 
 ```mermaid
 flowchart TB
@@ -21,7 +21,8 @@ flowchart TB
     tok["tokenizer::Tokenizer"]
     weights["weights::WeightSet"]
     model["model::ModelConfig"]
-    layers["layers::EmbeddingTable"]
+    emb["layers::EmbeddingTable"]
+    rope["layers::Rope"]
     tensor["tensor::Tensor"]
 
     main --> lib
@@ -30,39 +31,36 @@ flowchart TB
     lib --> tok
     lib --> weights
     lib --> model
-    lib --> layers
+    lib --> emb
+    lib --> rope
     lib --> tensor
     tok --> gguf
     weights --> gguf
     model --> gguf
-    layers --> weights
-    layers --> model
-    layers --> tensor
-    weights --> tensor
+    emb --> weights
+    emb --> model
+    rope --> model
+    emb --> tensor
+    rope --> tensor
 ```
 
 ### Responsibilities
 
-| Component | Responsibility | Non-goals (Phase 7) |
+| Component | Responsibility | Non-goals (Phase 8) |
 |---|---|---|
-| `gguf` | Parse directory / metadata | Own the byte map |
-| `weights` | mmap, bounds check, dense materialize | Full Q4_K dequant kernels |
-| `tokenizer` | Vocab encode/decode | Chat templates |
-| `model` | Architecture + validated hparams | Execute layers |
-| `layers` | Embedding gather (more kernels later) | RoPE / attention / FFN |
-| `tensor` | Contiguous f32 math | On-disk layout |
+| `model` | Hparams including `rope.*` | Execute rotations |
+| `layers::Rope` | Cos/sin cache + Q/K rotate | Attention scores |
+| `layers::EmbeddingTable` | Token gather | Positions |
+| `weights` | mmap / materialize | Dequant kernels |
 
-## Embedding load pipeline
+## RoPE pipeline
 
 ```mermaid
 flowchart LR
-    W["WeightSet"] --> T["token_embd.weight"]
-    C["ModelConfig"] --> V["shape checks"]
-    T --> M["f32/f16 materialize"]
-    M --> R["reinterpret [vocab, embd]"]
-    V --> R
-    R --> E["EmbeddingTable"]
-    E --> G["forward / gather"]
+    Cfg["ModelConfig.rope"] --> Cache["cos/sin tables"]
+    QK["Q/K activations"] --> Apply["Rope::forward"]
+    Cache --> Apply
+    Apply --> Out["rotated Q/K"]
 ```
 
 ## Boundary rules
@@ -75,6 +73,7 @@ flowchart LR
 6. **Quantized payloads stay as `&[u8]`** until a kernel needs dequant.
 7. **Layers read shapes from `ModelConfig`**, not raw metadata maps.
 8. **ggml dimension order is reinterpreted explicitly** at layer boundaries.
+9. **RoPE does not touch V** — only Q/K (attention Phase 11).
 
 ## Module ownership
 
@@ -85,23 +84,23 @@ flowchart LR
 | `tokenizer` | Vocab, specials, encode/decode | Phase 4 |
 | `weights` | mmap, quant meta, materialize | Phase 5 |
 | `model` | Architecture + hyperparameters | Phase 6 |
-| `layers` | Embedding (+ future kernels) | **Phase 7** |
+| `layers` | Embedding + RoPE (+ future kernels) | Phase 7–**8** |
 
 ## Tradeoffs recorded
 
-### Reinterpret vs transpose-copy
+### Precompute cos/sin vs on-the-fly
 
 | Option | Pros | Cons |
 |---|---|---|
-| **Reinterpret `[vocab, embd]` (chosen)** | Zero copy; matches ggml bytes | Callers must understand ggml order |
-| Explicit transpose into new buffer | “Obvious” PyTorch layout | Wasteful bandwidth on huge vocabs |
+| **Precompute to `context_length` (chosen)** | Fast decode; auditable tables | Memory ∝ ctx × pairs |
+| Compute `sin`/`cos` per call | Tiny footprint | Repeated transcendentals |
 
-### `layers` module vs stuffing into `model`
+### Linear-only scaling in Phase 8
 
 | Option | Pros | Cons |
 |---|---|---|
-| **`layers` (chosen)** | Room for RoPE / attn / FFN | Extra module |
-| Everything under `model` | Fewer top-level mods | Mixes hparams with kernels |
+| **Linear only (chosen)** | Matches common GGUF exports; correct math | YaRN/NTK rejected |
+| Stub all scaling types as no-ops | Broader open | Silently wrong long-context |
 
 ## Evolution policy
 

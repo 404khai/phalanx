@@ -5,8 +5,8 @@
 
 use phalanx::{
     Architecture, EmbeddingTable, EncodeOptions, GgmlType, GgufError, GgufFile, LayersError,
-    ModelConfig, ModelError, PhalanxError, QuantMeta, RUNTIME_NAME, Shape, SpecialTokens, Tensor,
-    TensorError, Tokenizer, TokenizerModel, VERSION, Vocabulary,
+    ModelConfig, ModelError, PhalanxError, QuantMeta, RUNTIME_NAME, Rope, Shape, SpecialTokens,
+    Tensor, TensorError, Tokenizer, TokenizerModel, VERSION, Vocabulary,
 };
 
 #[test]
@@ -99,6 +99,39 @@ fn embedding_gather_works_across_crate_boundary() {
     .unwrap();
     let out = table.forward(&[1, 0]).unwrap();
     assert_eq!(out.as_slice(), &[3.0, 4.0, 1.0, 2.0]);
+}
+
+#[test]
+fn rope_preserves_norm_across_crate_boundary() {
+    use phalanx::{AttentionConfig, RopeConfig};
+    let config = ModelConfig::from_parts(ModelConfig {
+        architecture: Architecture::Llama,
+        name: None,
+        vocab_size: None,
+        context_length: 16,
+        embedding_length: 8,
+        feed_forward_length: 16,
+        block_count: 1,
+        attention: AttentionConfig {
+            head_count: 2,
+            head_count_kv: 2,
+            key_length: 4,
+            value_length: 4,
+        },
+        rope: RopeConfig {
+            dimension_count: 4,
+            freq_base: 10_000.0,
+            scaling: None,
+        },
+        rms_norm_eps: 1e-5,
+    })
+    .unwrap();
+    let rope = Rope::from_config(&config).unwrap();
+    let x = Tensor::from_vec(vec![1.0, 2.0, 3.0, 4.0], Shape::new([1, 4]).unwrap()).unwrap();
+    let y = rope.forward(&x, 3).unwrap();
+    let nx: f32 = x.as_slice().iter().map(|v| v * v).sum::<f32>().sqrt();
+    let ny: f32 = y.as_slice().iter().map(|v| v * v).sum::<f32>().sqrt();
+    assert!((nx - ny).abs() < 1e-5);
 }
 
 #[test]

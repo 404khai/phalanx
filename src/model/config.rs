@@ -94,7 +94,7 @@ pub struct ModelConfig {
     pub block_count: u32,
     /// Attention head layout.
     pub attention: AttentionConfig,
-    /// `RoPE` parameters for later Phase 8 kernels.
+    /// `RoPE` parameters for [`crate::layers::Rope`].
     pub rope: RopeConfig,
     /// `RMSNorm` ε (`attention.layer_norm_rms_epsilon`).
     pub rms_norm_eps: f32,
