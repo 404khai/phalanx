@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Odyssey Spec **v1.0.0** alignment docs: [spec-compliance.md](docs/spec-compliance.md),
+  [compatibility.md](docs/compatibility.md),
+  [architecture_mapping.md](docs/architecture_mapping.md)
+- README links declaring Phalanx as the reference Odyssey inference runtime
+
 - Phase 8 rotary embeddings: [`layers::Rope`](src/layers/rope.rs) with
   precomputed cos/sin caches, Llama adjacent-pair rotation, partial rotary
   dims, linear scaling, and docs in [`docs/rope.md`](docs/rope.md).
