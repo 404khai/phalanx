@@ -10,6 +10,12 @@ Phalanx is built to be both:
 
 > Status: **Phase 8 complete** — Llama-style `Rope` cos/sin cache + Q/K rotate.
 > `RMSNorm` comes next.
+>
+> **Odyssey alignment:** Phalanx is the reference inference runtime for Odyssey.
+> Target contract: [Odyssey Spec v1.0.0](../odyssey/spec/README.md) ·
+> [Spec compliance](docs/spec-compliance.md) ·
+> [Compatibility](docs/compatibility.md) ·
+> [Architecture mapping](docs/architecture_mapping.md).
 
 ---
 
@@ -93,7 +99,10 @@ flowchart TB
 See [docs/architecture.md](docs/architecture.md), [docs/gguf.md](docs/gguf.md),
 [docs/tokenizer.md](docs/tokenizer.md), [docs/weights.md](docs/weights.md),
 [docs/model.md](docs/model.md), [docs/embeddings.md](docs/embeddings.md),
-and [docs/rope.md](docs/rope.md).
+[docs/rope.md](docs/rope.md), and Odyssey alignment docs
+([spec-compliance](docs/spec-compliance.md),
+[compatibility](docs/compatibility.md),
+[architecture_mapping](docs/architecture_mapping.md)).
 
 ---
 
