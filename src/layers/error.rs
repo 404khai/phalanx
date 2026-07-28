@@ -5,7 +5,7 @@
 
 use thiserror::Error;
 
-/// Errors from loading or executing decoder layers (embeddings today).
+/// Errors from loading or executing decoder layers.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum LayersError {
     /// Required weight tensor was not found in the GGUF directory.
@@ -40,5 +40,23 @@ pub enum LayersError {
         id: u32,
         /// Rows in the embedding table.
         vocab_size: usize,
+    },
+
+    /// Activation tensor has the wrong rank or sizes for a kernel.
+    #[error("invalid activation shape for {op}: {reason}")]
+    InvalidActivationShape {
+        /// Kernel name (`rope`, …).
+        op: &'static str,
+        /// Human-readable explanation.
+        reason: String,
+    },
+
+    /// Absolute position exceeds the precomputed `RoPE` cache.
+    #[error("RoPE position {position} exceeds cache length {max_position}")]
+    RopePositionOutOfRange {
+        /// Requested absolute position.
+        position: usize,
+        /// Cached positions (`0 .. max_position`).
+        max_position: usize,
     },
 }

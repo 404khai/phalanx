@@ -381,10 +381,60 @@ gather correctness is the Phase 7 deliverable.
 
 - Quantized embedding dequant
 - Tied `output.weight` / input embeddings
-- Absolute position embeddings (Llama uses RoPE → Phase 8)
 
 ### References used this phase
 
 - [LLaMA](https://arxiv.org/abs/2302.13971)
 - [GGUF specification](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md)
 - llama.cpp `TOKEN_EMBD` naming
+
+---
+
+## Phase 8 — Rotary embeddings
+
+### Scope delivered
+
+- `layers::Rope` with cos/sin cache from `ModelConfig`
+- Adjacent-pair Llama / RoFormer rotation on `[seq, head_dim]` and `[seq, heads, head_dim]`
+- Partial rotary dims; linear position scaling
+- `LayersError::{InvalidActivationShape, RopePositionOutOfRange}`
+- Docs: `docs/rope.md`
+
+### Decision log
+
+#### 1. Precompute tables to `context_length`
+
+**Pros:** Decode is a gather + mul/add; tables are inspectable.
+**Cons:** Memory grows with context.
+**Reason:** Educational clarity + typical inference pattern (llama.cpp-style).
+
+#### 2. Adjacent pairs (not GPT-NeoX half-split)
+
+**Pros:** Matches Llama / RoFormer reference.
+**Cons:** Some HF ports use NeoX layout — document the choice.
+**Reason:** GGUF Llama checkpoints expect this pairing.
+
+#### 3. Reject YaRN/NTK instead of no-op
+
+**Pros:** No silent long-context bugs.
+**Cons:** Those GGUF files error until Phase later.
+**Reason:** Prefer loud failure over wrong angles.
+
+### Testing strategy (Phase 8)
+
+| Layer | Location | Covers |
+|---|---|---|
+| Unit | `layers::rope` | pos0 identity, L2 norm, partial, linear scale, OOR, yarn reject |
+| Integration | `tests/smoke.rs` | public norm-preserving rotate |
+
+### Follow-ups deferred
+
+- YaRN / NTK / sectioned RoPE
+- Wire into attention (Phase 11)
+- Complex-view / SIMD rotate kernels (Phase 17)
+
+### References used this phase
+
+- [RoFormer](https://arxiv.org/abs/2104.09864)
+- [LLaMA](https://arxiv.org/abs/2302.13971)
+- llama.cpp RoPE + GGUF `rope.*` keys

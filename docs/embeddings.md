@@ -9,7 +9,7 @@ The first decoder stage maps token ids to dense activations via
 token ids ──► EmbeddingTable::forward ──► [seq, n_embd]
                                               │
                                               ▼
-                                    (Phase 8+) RoPE / layers …
+                                    (Phase 8) RoPE on Q/K …
 ```
 
 Prefill gathers many ids at once; decode gathers one. Both share the same
@@ -53,7 +53,7 @@ Validation:
 | Config shape checks | ✅ |
 | Quantized embedding dequant | ❌ (uses existing materialize path) |
 | Tied output / input embeddings | ❌ later |
-| Position embeddings (absolute) | ❌ Llama uses RoPE (Phase 8) |
+| Position embeddings (absolute) | ❌ Llama uses `RoPE` ([docs/rope.md](rope.md)) |
 
 ## References
 

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Phase 8 rotary embeddings: [`layers::Rope`](src/layers/rope.rs) with
+  precomputed cos/sin caches, Llama adjacent-pair rotation, partial rotary
+  dims, linear scaling, and docs in [`docs/rope.md`](docs/rope.md).
 - Phase 7 embedding layer: [`layers`](src/layers/) module with
   [`EmbeddingTable`](src/layers/embedding.rs) gather from
   `token_embd.weight`, ggml layout reinterpret to `[vocab, embd]`, and nested
