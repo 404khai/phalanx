@@ -5,7 +5,9 @@ This directory is the **long-term compatibility suite** between:
 | Project | Role | Language |
 | --- | --- | --- |
 | [Odyssey](../odyssey/) | Training framework (Spec source) | Python / PyTorch |
-| [Phalanx Runtime](../runtime/) | Reference inference runtime | Rust |
+| [Phalanx Runtime](../) | Reference inference runtime | Rust |
+
+*(When this folder lives at the monorepo root as `phalanx/validation/`, Phalanx is `../runtime/` instead — `_common.py` auto-detects both layouts.)*
 
 Every mathematical component that both projects implement must PASS here before claiming Spec compliance (Odyssey Principle 8 · Phalanx Rule 6).
 
