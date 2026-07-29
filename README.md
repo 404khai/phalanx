@@ -8,14 +8,15 @@ Phalanx is built to be both:
 1. a **production-minded systems codebase** (correctness, structure, performance), and
 2. a **mini textbook** for how LLM inference actually works under the hood.
 
-> Status: **Phase 8 complete** — Llama-style `Rope` cos/sin cache + Q/K rotate.
-> `RMSNorm` comes next.
+> Status: **Phase 9 complete** — Llama-style `RmsNorm` (γ ⊙ x / RMS(x)).
+> Feed-forward (`SwiGLU`) comes next.
 >
 > **Odyssey alignment:** Phalanx is the reference inference runtime for Odyssey.
 > Target contract: [Odyssey Spec v1.0.0](../odyssey/spec/README.md) ·
 > [Spec compliance](docs/spec-compliance.md) ·
 > [Compatibility](docs/compatibility.md) ·
-> [Architecture mapping](docs/architecture_mapping.md).
+> [Architecture mapping](docs/architecture_mapping.md) ·
+> Shared suite: [`../validation/`](../validation/README.md).
 
 ---
 
@@ -36,8 +37,9 @@ Eventually Phalanx should support:
 | Model config (Llama hparams)              | Phase 6                 |
 | Token embedding gather                    | Phase 7                 |
 | Rotary embeddings (`RoPE`)                | **Phase 8**             |
-| Decoder-only transformers                 | Planned (Phase 9–13)    |
-| RMSNorm / Attention / KV cache            | Planned (Phases 9–12)   |
+| RMSNorm                                   | **Phase 9**             |
+| Decoder-only transformers                 | Planned (Phase 10–13)   |
+| Attention / KV cache                      | Planned (Phases 11–12)  |
 | Sampling (greedy, temp, top-k/p, min-p)   | Planned (Phase 14)      |
 | Streaming generation                      | Planned (Phase 15)      |
 | CLI + library API                         | Partial (banner CLI)    |
@@ -50,7 +52,7 @@ Eventually Phalanx should support:
 
 
 
-## Architecture (Phase 8)
+## Architecture (Phase 9)
 
 ```mermaid
 flowchart TB
@@ -68,10 +70,11 @@ flowchart TB
         Model["model::ModelConfig"]
         Emb["layers::EmbeddingTable"]
         Rope["layers::Rope"]
+        Rms["layers::RmsNorm"]
     end
 
     subgraph future [Future phases]
-        Decoder["RMSNorm / attn / FFN / decoder"]
+        Decoder["attn / FFN / decoder"]
     end
 
     CLI --> API
@@ -83,23 +86,28 @@ flowchart TB
     API --> Model
     API --> Emb
     API --> Rope
+    API --> Rms
     Tok --> GGUF
     Weights --> GGUF
     Model --> GGUF
     Emb --> Weights
     Emb --> Model
     Rope --> Model
+    Rms --> Model
+    Rms --> Weights
     Emb --> Tensor
     Rope --> Tensor
+    Rms --> Tensor
     Weights --> Tensor
     Emb -.-> Decoder
     Rope -.-> Decoder
+    Rms -.-> Decoder
 ```
 
 See [docs/architecture.md](docs/architecture.md), [docs/gguf.md](docs/gguf.md),
 [docs/tokenizer.md](docs/tokenizer.md), [docs/weights.md](docs/weights.md),
 [docs/model.md](docs/model.md), [docs/embeddings.md](docs/embeddings.md),
-[docs/rope.md](docs/rope.md), and Odyssey alignment docs
+[docs/rope.md](docs/rope.md), [docs/rmsnorm.md](docs/rmsnorm.md), and Odyssey alignment docs
 ([spec-compliance](docs/spec-compliance.md),
 [compatibility](docs/compatibility.md),
 [architecture_mapping](docs/architecture_mapping.md)).
@@ -206,6 +214,13 @@ Block dequant kernels arrive with later layer work.
 - [x] Partial rotary dims + linear `rope.scaling`
 - [x] Reject unsupported YaRN/NTK scaling types loudly
 
+#### Phase 9
+
+- [x] `layers::RmsNorm` — γ ⊙ x / RMS(x), ε from `rms_norm_eps`
+- [x] Load γ from GGUF (`attn_norm` / `ffn_norm` / `output_norm`)
+- [x] Cross-implementation validator `validate_rmsnorm` (vs Odyssey)
+- [x] Docs: `docs/rmsnorm.md`
+
 ### Known limitations
 
 - Only `general.architecture = "llama"` is configured (others rejected).
@@ -216,10 +231,11 @@ Block dequant kernels arrive with later layer work.
 - Little-endian only (GGUF default).
 - CLI cannot yet `inspect` a path — library API only.
 - Crate `unsafe_code` is `deny` (not `forbid`); only `weights::storage` opts in.
+- Pre-norm residual block wiring waits for the decoder (Phase 13).
 
 ### Next phase preview
 
-**Phase 9 — RMSNorm:** normalize activations with `rms_norm_eps` before attention / FFN.
+**Phase 10 — Feed Forward (SwiGLU):** gated FFN used by Llama-style models.
 
 ---
 
@@ -237,8 +253,9 @@ Block dequant kernels arrive with later layer work.
 | 5     | Tensor / weight loading (+ mmap, quant metadata)      |
 | 6     | Model config (Llama-style)                            |
 | 7     | Embedding layer                                       |
-| **8** | Rotary embeddings (`RoPE`) ← **you are here**         |
-| 9–13  | RMSNorm → FFN → Attention → KV cache → Decoder        |
+| 8     | Rotary embeddings (`RoPE`)                            |
+| **9** | RMSNorm ← **you are here**                            |
+| 10–13 | FFN → Attention → KV cache → Decoder                  |
 | 14–16 | Sampling → streaming generation → full CLI            |
 | 17–20 | Profiling → benchmarks → examples → docs polish       |
 
@@ -325,6 +342,19 @@ fn rotate_qk(path: &str, q: &phalanx::Tensor) -> phalanx::Result<phalanx::Tensor
 }
 ```
 
+### RMSNorm (library)
+
+```rust
+use phalanx::{OUTPUT_NORM_WEIGHT, RmsNorm, WeightSet, ModelConfig};
+
+fn normalize(path: &str, x: &phalanx::Tensor) -> phalanx::Result<phalanx::Tensor> {
+    let weights = WeightSet::open_mmap(path)?;
+    let config = ModelConfig::from_gguf(weights.gguf())?;
+    let norm = RmsNorm::from_weights(&weights, OUTPUT_NORM_WEIGHT, &config)?;
+    norm.forward(x)
+}
+```
+
 
 
 ### Tensor API
@@ -376,24 +406,25 @@ cargo build --release
 
 
 
-### Project layout (Phase 8)
+### Project layout (Phase 9)
 
 ```text
 phalanx/
 ├── src/
 │   ├── lib.rs           # library root & public re-exports
 │   ├── main.rs          # thin CLI entrypoint
+│   ├── bin/             # validate_rope, validate_rmsnorm
 │   ├── errors/          # typed PhalanxError
 │   ├── tensor/          # shape, dtype, storage, ops
 │   ├── gguf/            # GGUF container parser
 │   ├── tokenizer/       # vocab, specials, encode/decode
 │   ├── weights/         # mmap, quant metadata, materialize
 │   ├── model/           # architecture + transformer config
-│   ├── layers/          # embedding, RoPE (+ future kernels)
+│   ├── layers/          # embedding, RoPE, RMSNorm
 │   └── utils/           # logging bootstrap
 ├── benches/             # Criterion microbenchmarks
 ├── tests/               # crate-boundary smoke tests
-├── docs/                # architecture, GGUF, tokenizer, weights, model, embeddings, rope
+├── docs/                # architecture, GGUF, tokenizer, weights, model, embeddings, rope, rmsnorm
 ├── assets/              # reserved for fixtures / diagrams (no weights)
 ├── examples/            # reserved for Phase 19
 ├── AGENTS.md

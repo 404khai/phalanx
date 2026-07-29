@@ -5,8 +5,8 @@
 
 use phalanx::{
     Architecture, EmbeddingTable, EncodeOptions, GgmlType, GgufError, GgufFile, LayersError,
-    ModelConfig, ModelError, PhalanxError, QuantMeta, RUNTIME_NAME, Rope, Shape, SpecialTokens,
-    Tensor, TensorError, Tokenizer, TokenizerModel, VERSION, Vocabulary,
+    ModelConfig, ModelError, PhalanxError, QuantMeta, RUNTIME_NAME, RmsNorm, Rope, Shape,
+    SpecialTokens, Tensor, TensorError, Tokenizer, TokenizerModel, VERSION, Vocabulary,
 };
 
 #[test]
@@ -132,6 +132,15 @@ fn rope_preserves_norm_across_crate_boundary() {
     let nx: f32 = x.as_slice().iter().map(|v| v * v).sum::<f32>().sqrt();
     let ny: f32 = y.as_slice().iter().map(|v| v * v).sum::<f32>().sqrt();
     assert!((nx - ny).abs() < 1e-5);
+}
+
+#[test]
+fn rmsnorm_unit_rms_across_crate_boundary() {
+    let norm = RmsNorm::ones(4, 1e-6).unwrap();
+    let x = Tensor::from_vec(vec![2.0, -2.0, 2.0, -2.0], Shape::new([1, 4]).unwrap()).unwrap();
+    let y = norm.forward(&x).unwrap();
+    let mean_sq: f32 = y.as_slice().iter().map(|v| v * v).sum::<f32>() / 4.0;
+    assert!((mean_sq.sqrt() - 1.0).abs() < 1e-4);
 }
 
 #[test]

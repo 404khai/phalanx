@@ -15,8 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README links declaring Phalanx as the reference Odyssey inference runtime
 - Cross-implementation RoPE validator binary [`validate_rope`](src/bin/validate_rope.rs)
   (consumed by Odyssey `scripts/validate_rope.py`)
+- Cross-implementation RMSNorm validator binary [`validate_rmsnorm`](src/bin/validate_rmsnorm.rs)
+  (consumed by Odyssey `scripts/validate_rmsnorm.py` / `../validation/`)
 - `serde` / `serde_json` dependencies for validation manifests
 
+- Phase 9 RMSNorm: [`layers::RmsNorm`](src/layers/rmsnorm.rs) with Spec formula
+  `γ ⊙ x / RMS(x)`, GGUF γ helpers, and docs in [`docs/rmsnorm.md`](docs/rmsnorm.md).
 - Phase 8 rotary embeddings: [`layers::Rope`](src/layers/rope.rs) with
   precomputed cos/sin caches, Llama adjacent-pair rotation, partial rotary
   dims, linear scaling, and docs in [`docs/rope.md`](docs/rope.md).
