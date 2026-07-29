@@ -20,7 +20,7 @@ This matrix is the roadmap to full Odyssey compatibility. It does **not** author
 | RoPE | ✓ | `layers::Rope` | θ, partial rotary, linear scaling; **validated vs Odyssey** |
 | RMSNorm | ✓ | `layers::RmsNorm` | Spec formula; **validated vs Odyssey** (`validate_rmsnorm`) |
 | SwiGLU FFN | ✓ | `layers::SwiGlu` | Spec formula; **validated vs Odyssey** (`validate_swiglu`, tol `1e-3`) |
-| Attention (causal / GQA) | ✗ | — | Phase 11 |
+| Attention (causal / GQA) | ✓ | `layers::Attention` | Spec GQA/MHA; **validated vs Odyssey** (`validate_attention`, tol `1e-3`) |
 | Residual pre-norm block | ✗ | — | Phase 13 (helpers land with decoder) |
 | Final norm + LM head | ✗ | — | Phase 13 |
 | KV cache | ✗ | — | Phase 12 |

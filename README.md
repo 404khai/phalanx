@@ -8,8 +8,7 @@ Phalanx is built to be both:
 1. a **production-minded systems codebase** (correctness, structure, performance), and
 2. a **mini textbook** for how LLM inference actually works under the hood.
 
-> Status: **Phase 10 complete** — Llama-style `SwiGlu` feed-forward.
-> Attention comes next.
+> Status: **Phase 11 complete** — causal GQA / MHA `Attention` with optional `RoPE` on Q/K.
 >
 > **Odyssey alignment:** Phalanx is the reference inference runtime for Odyssey.
 > Target contract: [Odyssey Spec v1.0.0](../odyssey/spec/README.md) ·
@@ -39,8 +38,9 @@ Eventually Phalanx should support:
 | Rotary embeddings (`RoPE`)                | **Phase 8**             |
 | RMSNorm                                   | **Phase 9**             |
 | SwiGLU feed-forward                       | **Phase 10**            |
-| Decoder-only transformers                 | Planned (Phase 11–13)   |
-| Attention / KV cache                      | Planned (Phases 11–12)  |
+| Attention (GQA / MHA)                     | **Phase 11**            |
+| Decoder-only transformers                 | Planned (Phase 12–13)   |
+| KV cache                                  | Planned (Phase 12)      |
 | Sampling (greedy, temp, top-k/p, min-p)   | Planned (Phase 14)      |
 | Streaming generation                      | Planned (Phase 15)      |
 | CLI + library API                         | Partial (banner CLI)    |
@@ -53,7 +53,7 @@ Eventually Phalanx should support:
 
 
 
-## Architecture (Phase 10)
+## Architecture (Phase 11)
 
 ```mermaid
 flowchart TB
@@ -73,10 +73,11 @@ flowchart TB
         Rope["layers::Rope"]
         Rms["layers::RmsNorm"]
         Ffn["layers::SwiGlu"]
+        Attn["layers::Attention"]
     end
 
     subgraph future [Future phases]
-        Decoder["attn / decoder"]
+        Decoder["KV cache / decoder"]
     end
 
     CLI --> API
@@ -237,6 +238,14 @@ Block dequant kernels arrive with later layer work.
 - [x] Docs: `docs/swiglu.md`
 - [x] Reference matmul uses f64 accumulators for Spec parity
 
+#### Phase 11
+
+- [x] `layers::Attention` — causal GQA/MHA, scaled SDPA, stable Softmax
+- [x] Optional `RoPE` on Q/K inside `forward`
+- [x] GGUF helpers for `attn_q` / `attn_k` / `attn_v` / `attn_output`
+- [x] Cross-implementation validator `validate_attention` (vs Odyssey)
+- [x] Docs: `docs/attention.md`
+
 ### Known limitations
 
 - Only `general.architecture = "llama"` is configured (others rejected).
@@ -248,11 +257,12 @@ Block dequant kernels arrive with later layer work.
 - CLI cannot yet `inspect` a path — library API only.
 - Crate `unsafe_code` is `deny` (not `forbid`); only `weights::storage` opts in.
 - Pre-norm residual block wiring waits for the decoder (Phase 13).
-- SwiGLU cross-impl abs tolerance is `1e-3` (GEMM accum order; mean ≪ `1e-6`).
+- SwiGLU / Attention cross-impl abs tolerance is `1e-3` (GEMM accum order; mean ≪ `1e-6`).
+- Attention is prefill-style (full sequence); decode + KV cache is Phase 12.
 
 ### Next phase preview
 
-**Phase 11 — Attention:** causal multi-head / GQA attention with RoPE on Q/K.
+**Phase 12 — KV Cache:** incremental decode with cached K/V tensors.
 
 ---
 
@@ -272,8 +282,9 @@ Block dequant kernels arrive with later layer work.
 | 7     | Embedding layer                                       |
 | 8     | Rotary embeddings (`RoPE`)                            |
 | 9     | RMSNorm                                               |
-| **10** | SwiGLU FFN ← **you are here**                        |
-| 11–13 | Attention → KV cache → Decoder                        |
+| 10     | SwiGLU FFN                                            |
+| **11** | Attention (GQA) ← **you are here**                    |
+| 12–13 | KV cache → Decoder                                    |
 | 14–16 | Sampling → streaming generation → full CLI            |
 | 17–20 | Profiling → benchmarks → examples → docs polish       |
 
@@ -388,6 +399,18 @@ fn ffn(path: &str, layer: usize, x: &phalanx::Tensor) -> phalanx::Result<phalanx
 
 
 
+### Attention (library)
+
+```rust
+use phalanx::{Attention, Tensor};
+
+let attn = Attention::from_tensors(w_q, w_k, w_v, w_o, /*H*/ 8, /*H_kv*/ 2, /*d*/ 8)?;
+let y = attn.forward(&x, /*rope*/ None, 0)?;
+```
+
+See [docs/attention.md](docs/attention.md). Cross-check: `cargo run --bin validate_attention`.
+
+
 ### Tensor API
 
 ```rust
@@ -437,7 +460,7 @@ cargo build --release
 
 
 
-### Project layout (Phase 10)
+### Project layout (Phase 11)
 
 ```text
 phalanx/
@@ -451,7 +474,7 @@ phalanx/
 │   ├── tokenizer/       # vocab, specials, encode/decode
 │   ├── weights/         # mmap, quant metadata, materialize
 │   ├── model/           # architecture + transformer config
-│   ├── layers/          # embedding, RoPE, RMSNorm, SwiGLU
+│   ├── layers/          # embedding, RoPE, RMSNorm, SwiGLU, Attention
 │   └── utils/           # logging bootstrap
 ├── validation/          # shared Odyssey ↔ Phalanx suite
 ├── benches/             # Criterion microbenchmarks

@@ -4,9 +4,10 @@
 //! refactors that break re-exports fail loudly.
 
 use phalanx::{
-    Architecture, EmbeddingTable, EncodeOptions, GgmlType, GgufError, GgufFile, LayersError,
-    ModelConfig, ModelError, PhalanxError, QuantMeta, RUNTIME_NAME, RmsNorm, Rope, Shape,
-    SpecialTokens, SwiGlu, Tensor, TensorError, Tokenizer, TokenizerModel, VERSION, Vocabulary,
+    Architecture, Attention, EmbeddingTable, EncodeOptions, GgmlType, GgufError, GgufFile,
+    LayersError, ModelConfig, ModelError, PhalanxError, QuantMeta, RUNTIME_NAME, RmsNorm, Rope,
+    Shape, SpecialTokens, SwiGlu, Tensor, TensorError, Tokenizer, TokenizerModel, VERSION,
+    Vocabulary,
 };
 
 #[test]
@@ -186,4 +187,23 @@ fn tokenizer_encode_decode_round_trip_across_crate_boundary() {
         .unwrap();
     assert_eq!(ids, vec![0, 1]);
     assert_eq!(tok.decode(&ids).unwrap(), " hi!");
+}
+
+#[test]
+fn attention_gqa_forward_is_usable() {
+    let hidden = 16usize;
+    let heads = 4usize;
+    let kv = 2usize;
+    let head_dim = 4usize;
+    let q_out = heads * head_dim;
+    let kv_out = kv * head_dim;
+    let w_q = Tensor::ones([q_out, hidden]).unwrap();
+    let w_k = Tensor::ones([kv_out, hidden]).unwrap();
+    let w_v = Tensor::ones([kv_out, hidden]).unwrap();
+    let w_o = Tensor::ones([hidden, q_out]).unwrap();
+    let attn = Attention::from_tensors(w_q, w_k, w_v, w_o, heads, kv, head_dim).unwrap();
+    let y = attn
+        .forward(&Tensor::ones([1, 3, hidden]).unwrap(), None, 0)
+        .unwrap();
+    assert_eq!(y.shape().as_slice(), &[1, 3, hidden]);
 }

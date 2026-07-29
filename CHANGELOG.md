@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Phase 11 Attention: [`layers::Attention`](src/layers/attention.rs) with causal GQA/MHA,
+  optional [`Rope`](src/layers/rope.rs) on Q/K, GGUF `attn_q/k/v/output` helpers, and
+  docs in [`docs/attention.md`](docs/attention.md).
+- Cross-implementation Attention validator binary [`validate_attention`](src/bin/validate_attention.rs)
+
 - Odyssey Spec **v1.0.0** alignment docs: [spec-compliance.md](docs/spec-compliance.md),
   [compatibility.md](docs/compatibility.md),
   [architecture_mapping.md](docs/architecture_mapping.md)
