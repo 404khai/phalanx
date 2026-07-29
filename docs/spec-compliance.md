@@ -19,8 +19,8 @@ This matrix is the roadmap to full Odyssey compatibility. It does **not** author
 | Embedding gather | ✓ | `layers::EmbeddingTable` | Matches Spec `(V,D)` logical table |
 | RoPE | ✓ | `layers::Rope` | θ, partial rotary, linear scaling; **validated vs Odyssey** |
 | RMSNorm | ✓ | `layers::RmsNorm` | Spec formula; **validated vs Odyssey** (`validate_rmsnorm`) |
+| SwiGLU FFN | ✓ | `layers::SwiGlu` | Spec formula; **validated vs Odyssey** (`validate_swiglu`, tol `1e-3`) |
 | Attention (causal / GQA) | ✗ | — | Phase 11 |
-| SwiGLU FFN | ✗ | — | Phase 10 |
 | Residual pre-norm block | ✗ | — | Phase 13 (helpers land with decoder) |
 | Final norm + LM head | ✗ | — | Phase 13 |
 | KV cache | ✗ | — | Phase 12 |

@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (consumed by Odyssey `scripts/validate_rmsnorm.py` / `../validation/`)
 - `serde` / `serde_json` dependencies for validation manifests
 
+- Phase 10 SwiGLU FFN: [`layers::SwiGlu`](src/layers/swiglu.rs) with Spec formula
+  `(SiLU(x W1ᵀ) ⊙ (x W3ᵀ)) W2ᵀ`, GGUF `ffn_gate/up/down` helpers, and docs in
+  [`docs/swiglu.md`](docs/swiglu.md).
+- Cross-implementation SwiGLU validator binary [`validate_swiglu`](src/bin/validate_swiglu.rs)
+- Reference `Tensor::matmul` uses float64 accumulators for Spec parity
 - Phase 9 RMSNorm: [`layers::RmsNorm`](src/layers/rmsnorm.rs) with Spec formula
   `γ ⊙ x / RMS(x)`, GGUF γ helpers, and docs in [`docs/rmsnorm.md`](docs/rmsnorm.md).
 - Phase 8 rotary embeddings: [`layers::Rope`](src/layers/rope.rs) with

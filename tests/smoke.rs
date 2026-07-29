@@ -6,7 +6,7 @@
 use phalanx::{
     Architecture, EmbeddingTable, EncodeOptions, GgmlType, GgufError, GgufFile, LayersError,
     ModelConfig, ModelError, PhalanxError, QuantMeta, RUNTIME_NAME, RmsNorm, Rope, Shape,
-    SpecialTokens, Tensor, TensorError, Tokenizer, TokenizerModel, VERSION, Vocabulary,
+    SpecialTokens, SwiGlu, Tensor, TensorError, Tokenizer, TokenizerModel, VERSION, Vocabulary,
 };
 
 #[test]
@@ -141,6 +141,17 @@ fn rmsnorm_unit_rms_across_crate_boundary() {
     let y = norm.forward(&x).unwrap();
     let mean_sq: f32 = y.as_slice().iter().map(|v| v * v).sum::<f32>() / 4.0;
     assert!((mean_sq.sqrt() - 1.0).abs() < 1e-4);
+}
+
+#[test]
+fn swiglu_preserves_shape_across_crate_boundary() {
+    let gate = Tensor::ones([8, 4]).unwrap();
+    let up = Tensor::ones([8, 4]).unwrap();
+    let down = Tensor::ones([4, 8]).unwrap();
+    let ffn = SwiGlu::from_tensors(gate, up, down).unwrap();
+    let x = Tensor::ones([2, 3, 4]).unwrap();
+    let y = ffn.forward(&x).unwrap();
+    assert_eq!(y.shape().as_slice(), &[2, 3, 4]);
 }
 
 #[test]

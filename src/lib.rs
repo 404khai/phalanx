@@ -3,8 +3,8 @@
 //! A high-performance, educational inference runtime for decoder-only
 //! language models, beginning with GGUF-format weights.
 //!
-//! Phase 9 adds [`layers::RmsNorm`]: Llama-style root-mean-square
-//! normalization applied to residual-stream activations.
+//! Phase 10 adds [`layers::SwiGlu`]: Llama-style gated feed-forward
+//! (`SiLU(x W1ᵀ) ⊙ (x W3ᵀ)` then `W2ᵀ`).
 //!
 //! # Crate layout
 //!
@@ -14,7 +14,7 @@
 //! - [`tokenizer`] — vocab, special tokens, encode / decode
 //! - [`weights`] — mmap + quant metadata + dense materialization
 //! - [`model`] — architecture + transformer config
-//! - [`layers`] — embedding, `RoPE`, `RMSNorm` (and future attention / `FFN`)
+//! - [`layers`] — embedding, `RoPE`, `RMSNorm`, `SwiGLU` (and future attention)
 //! - [`utils`] — cross-cutting helpers (logging today; more later)
 
 #![doc(html_root_url = "https://docs.rs/phalanx/0.1.0")]
@@ -31,8 +31,9 @@ pub mod weights;
 pub use errors::{PhalanxError, Result};
 pub use gguf::{GgmlType, GgufError, GgufFile, GgufHeader, MetadataValue, TensorInfo};
 pub use layers::{
-    EmbeddingTable, LayersError, OUTPUT_NORM_WEIGHT, RmsNorm, Rope, TOKEN_EMBD_WEIGHT,
-    attn_norm_weight_name, ffn_norm_weight_name,
+    EmbeddingTable, LayersError, OUTPUT_NORM_WEIGHT, RmsNorm, Rope, SwiGlu, TOKEN_EMBD_WEIGHT,
+    attn_norm_weight_name, ffn_down_weight_name, ffn_gate_weight_name, ffn_norm_weight_name,
+    ffn_up_weight_name,
 };
 pub use model::{Architecture, AttentionConfig, ModelConfig, ModelError, RopeConfig, RopeScaling};
 pub use tensor::{DType, Shape, Tensor, TensorError};

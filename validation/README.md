@@ -5,9 +5,9 @@ This directory is the **long-term compatibility suite** between:
 | Project | Role | Language |
 | --- | --- | --- |
 | [Odyssey](../odyssey/) | Training framework (Spec source) | Python / PyTorch |
-| [Phalanx Runtime](../) | Reference inference runtime | Rust |
+| [Phalanx Runtime](../runtime/) | Reference inference runtime | Rust |
 
-*(When this folder lives at the monorepo root as `phalanx/validation/`, Phalanx is `../runtime/` instead — `_common.py` auto-detects both layouts.)*
+*(When this folder lives inside `runtime/validation/`, Phalanx is `..` and Odyssey is the sibling checkout — `_common.py` auto-detects both layouts.)*
 
 Every mathematical component that both projects implement must PASS here before claiming Spec compliance (Odyssey Principle 8 · Phalanx Rule 6).
 
@@ -18,12 +18,12 @@ Every mathematical component that both projects implement must PASS here before 
 ```text
 validation/
 ├── README.md
-├── _common.py              # shared f32 I/O + compare helpers
-├── test_embeddings.py      # planned (Phase parity pending dedicated binary)
-├── test_rope.py            # RoPE — live
-├── test_rmsnorm.py         # RMSNorm — live
-├── test_attention.py       # stub until both sides implement attention
-└── test_swiglu.py          # stub until both sides implement SwiGLU
+├── _common.py
+├── test_embeddings.py      # placeholder
+├── test_rope.py            # live
+├── test_rmsnorm.py         # live
+├── test_swiglu.py          # live
+└── test_attention.py       # stub
 ```
 
 ---
@@ -35,32 +35,20 @@ Each live validator:
 1. Generates **deterministic** random inputs (fixed seed).
 2. Runs the **Odyssey** implementation.
 3. Runs the **Phalanx** implementation (via `cargo run --bin validate_*`).
-4. Compares outputs within a configurable tolerance (default float32 **`1e-6`**).
-5. Prints a small report: **max error**, **mean error**, **PASS/FAIL**.
+4. Compares outputs within a configurable tolerance.
+5. Prints **max error**, **mean error**, **PASS/FAIL**.
 
-Underlying drivers (kept as the source of truth for I/O manifests):
-
-- Odyssey: `odyssey/scripts/validate_<component>.py`
-- Phalanx: `runtime/src/bin/validate_<component>.rs`
-
-These wrappers call those drivers so CI / humans have one entry point under `validation/`.
+Default float32 tolerance: `1e-6` (SwiGLU documents `1e-3` for GEMM accum order).
 
 ---
 
 ## Running
 
-From the monorepo root (`phalanx/`):
-
 ```bash
-# Live components
 python validation/test_rmsnorm.py
 python validation/test_rope.py
-
-# Full suite (skips stubs with a clear message)
-python validation/test_rmsnorm.py && python validation/test_rope.py
+python validation/test_swiglu.py
 ```
-
-Optional knobs are forwarded to the Odyssey scripts (`--seed`, `--tolerance`, …).
 
 ---
 
@@ -71,8 +59,8 @@ Optional knobs are forwarded to the Odyssey scripts (`--seed`, `--tolerance`, �
 | Embedding | ✓ | ✓ | planned (`test_embeddings.py` placeholder) |
 | RoPE | ✓ | ✓ | ✓ `test_rope.py` |
 | RMSNorm | ✓ | ✓ | ✓ `test_rmsnorm.py` |
+| SwiGLU | ✓ | ✓ | ✓ `test_swiglu.py` |
 | Attention | — | — | stub |
-| SwiGLU | — | — | stub |
 | KV Cache / Decoder / Sampling | — | — | future |
 
 ---
@@ -81,5 +69,5 @@ Optional knobs are forwarded to the Odyssey scripts (`--seed`, `--tolerance`, �
 
 1. Implement Odyssey + Phalanx to Spec.
 2. Add `odyssey/scripts/validate_<name>.py` + `runtime/src/bin/validate_<name>.rs`.
-3. Add `validation/test_<name>.py` that shells out (or imports) the Odyssey driver.
+3. Add `validation/test_<name>.py` that shells out to the Odyssey driver.
 4. Flip the status row above only after PASS.
