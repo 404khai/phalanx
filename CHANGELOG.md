@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [compatibility.md](docs/compatibility.md),
   [architecture_mapping.md](docs/architecture_mapping.md)
 - README links declaring Phalanx as the reference Odyssey inference runtime
+- Cross-implementation RoPE validator binary [`validate_rope`](src/bin/validate_rope.rs)
+  (consumed by Odyssey `scripts/validate_rope.py`)
+- `serde` / `serde_json` dependencies for validation manifests
 
 - Phase 8 rotary embeddings: [`layers::Rope`](src/layers/rope.rs) with
   precomputed cos/sin caches, Llama adjacent-pair rotation, partial rotary

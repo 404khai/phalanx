@@ -17,7 +17,7 @@ This matrix is the roadmap to full Odyssey compatibility. It does **not** author
 | Tokenizer API parity | ✗ | `tokenizer::Tokenizer` | GGUF path only; no `odyssey-bpe` dir loader yet |
 | Weight naming (GGUF map) | ✓ Partial | `token_embd.weight` | Only embedding bound |
 | Embedding gather | ✓ | `layers::EmbeddingTable` | Matches Spec `(V,D)` logical table |
-| RoPE | ✓ | `layers::Rope` | θ, partial rotary, linear scaling |
+| RoPE | ✓ | `layers::Rope` | θ, partial rotary, linear scaling; **validated vs Odyssey** (`validate_rope` / `scripts/validate_rope.py`, max err ≈ 4.8e-7) |
 | RMSNorm | ✗ | — | Phase 9 |
 | Attention (causal / GQA) | ✗ | — | Phase 11 |
 | SwiGLU FFN | ✗ | — | Phase 10 |

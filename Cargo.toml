@@ -14,6 +14,8 @@ repository = "https://github.com/phalanx-runtime/phalanx"
 anyhow = "1.0.104"
 half = "2.7.1"
 memmap2 = "0.9.11"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 thiserror = "2.0.19"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
