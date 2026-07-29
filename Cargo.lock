@@ -316,6 +316,8 @@ dependencies = [
  "criterion",
  "half",
  "memmap2",
+ "serde",
+ "serde_json",
  "thiserror",
  "tracing",
  "tracing-subscriber",
