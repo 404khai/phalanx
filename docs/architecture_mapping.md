@@ -56,6 +56,7 @@ flowchart TB
 | Embedding | `tok_embeddings.weight` | `token_embd.weight` | `EmbeddingTable` ✓ |
 | RoPE | positions on Q/K | `llama.rope.*` | `Rope` ✓ |
 | RMSNorm | `*.attention_norm` / `ffn_norm` / `norm` | `blk.*.attn_norm` / `ffn_norm` / `output_norm` | `RmsNorm` ✓ |
+| SwiGLU | `w1/w3/w2` | `blk.*.ffn_gate/up/down` | `SwiGlu` ✓ |
 | Attention | `wq/wk/wv/wo` | `blk.*.attn_*` | Planned |
 | SwiGLU | `w1/w3/w2` | `ffn_gate/up/down` | Planned |
 | KV cache | runtime state | — | Planned |
@@ -72,7 +73,8 @@ flowchart TB
 | Embedding | `EmbeddingTable::forward` |
 | RoPE | `Rope::forward` on Q/K |
 | RMSNorm | `RmsNorm::forward` on residual stream |
-| Attn / FFN / block residuals | Not wired |
+| SwiGLU | `SwiGlu::forward` |
+| Attn / block residuals | Not wired |
 | Logits / sample | Not wired |
 
 ---

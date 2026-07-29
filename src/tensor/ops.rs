@@ -110,15 +110,18 @@ impl Tensor {
         let right = rhs.as_slice();
         let mut out = vec![0.0f32; m * n];
 
-        // ijk loop order: simple to audit; cache-friendlier ikj can wait for
-        // Phase 17 profiling evidence.
+        // ijk loop with f64 accumulators — keeps reference kernels aligned with
+        // PyTorch/BLAS float32 results tightly enough for Spec parity checks.
         for i in 0..m {
             for j in 0..n {
-                let mut acc = 0.0f32;
+                let mut acc = 0.0f64;
                 for t in 0..k {
-                    acc += left[i * k + t] * right[t * n + j];
+                    acc += f64::from(left[i * k + t]) * f64::from(right[t * n + j]);
                 }
-                out[i * n + j] = acc;
+                #[allow(clippy::cast_possible_truncation)]
+                {
+                    out[i * n + j] = acc as f32;
+                }
             }
         }
 

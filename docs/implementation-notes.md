@@ -482,3 +482,47 @@ gather correctness is the Phase 7 deliverable.
 
 - [RMSNorm](https://arxiv.org/abs/1910.07467)
 - Odyssey Spec `rmsnorm.md`
+
+---
+
+## Phase 10 — SwiGLU Feed-Forward
+
+### Delivered
+
+- `layers::SwiGlu` with Spec formula `(SiLU(x W1ᵀ) ⊙ (x W3ᵀ)) W2ᵀ`
+- GGUF helpers: `ffn_gate_weight_name` / `ffn_up_weight_name` / `ffn_down_weight_name`
+- Cross-impl binary `src/bin/validate_swiglu.rs`
+- Docs: `docs/swiglu.md`
+- `Tensor::matmul` float64 accumulators for tighter parity
+
+### Decision log
+
+#### 1. Spec weight order `w1` gate / `w3` up / `w2` down
+
+**Pros:** Matches Odyssey Spec / GGUF mapping.
+**Cons:** Differs from some pedagogical `W1/W2/W3` renumberings.
+**Reason:** Spec wins (Rule 6).
+
+#### 2. Documented SwiGLU abs tolerance `1e-3`
+
+**Pros:** Honest about GEMM accumulation order vs PyTorch; mean error ≪ `1e-6`.
+**Cons:** Looser than default `1e-6`.
+**Reason:** Principle 8 / Rule 6 allow component-documented tolerances.
+
+### Testing strategy (Phase 10)
+
+| Layer | Location | Covers |
+|---|---|---|
+| Unit | `layers::swiglu` | shape, SiLU formula, bad dim, name helpers |
+| Integration | `tests/smoke.rs` | public shape preserve |
+| Parity | `validate_swiglu` + Odyssey script | max/mean/rel error |
+
+### Follow-ups deferred
+
+- Fused SwiGLU kernels / BLAS (Phase 17)
+- Wire into decoder block (Phase 13)
+
+### References used this phase
+
+- [GLU Variants](https://arxiv.org/abs/2002.05202)
+- Odyssey Spec `feedforward.md`

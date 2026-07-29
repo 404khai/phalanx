@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Shared suite: SwiGLU parity (stub until Phase landing on both sides)."""
+"""Shared suite: SwiGLU Odyssey ↔ Phalanx numerical parity."""
 
 from __future__ import annotations
 
-from _common import stub_message
+import sys
+
+from _common import run_odyssey_validator
 
 
 def main() -> int:
-    return stub_message("SwiGLU")
+    return run_odyssey_validator("validate_swiglu.py", sys.argv[1:])
 
 
 if __name__ == "__main__":

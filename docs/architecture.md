@@ -1,4 +1,4 @@
-# Architecture — Phase 9
+# Architecture — Phase 10
 
 This document tracks architectural intent as Phalanx grows. Update it every
 phase; the README embeds a summary diagram for quick reading.
@@ -11,7 +11,7 @@ phase; the README embeds a summary diagram for quick reading.
 - **Educational clarity** — diagrams and notes explain *why*, not only *what*.
 - **Odyssey parity** — Rule 6: claim Spec compliance only after `validate_*` PASSes.
 
-## Phase 9 component map
+## Phase 10 component map
 
 ```mermaid
 flowchart TB
@@ -25,6 +25,7 @@ flowchart TB
     emb["layers::EmbeddingTable"]
     rope["layers::Rope"]
     rms["layers::RmsNorm"]
+    ffn["layers::SwiGlu"]
     tensor["tensor::Tensor"]
 
     main --> lib
@@ -36,6 +37,7 @@ flowchart TB
     lib --> emb
     lib --> rope
     lib --> rms
+    lib --> ffn
     lib --> tensor
     tok --> gguf
     weights --> gguf
@@ -45,29 +47,33 @@ flowchart TB
     rope --> model
     rms --> model
     rms --> weights
+    ffn --> model
+    ffn --> weights
     emb --> tensor
     rope --> tensor
     rms --> tensor
+    ffn --> tensor
 ```
 
 ### Responsibilities
 
-| Component | Responsibility | Non-goals (Phase 9) |
+| Component | Responsibility | Non-goals (Phase 10) |
 |---|---|---|
-| `model` | Hparams including `rms_norm_eps` | Execute norms |
+| `layers::SwiGlu` | Gated FFN forward | Attention / residuals |
 | `layers::RmsNorm` | γ ⊙ x / RMS(x) | Residual block wiring |
 | `layers::Rope` | Cos/sin cache + Q/K rotate | Attention scores |
 | `layers::EmbeddingTable` | Token gather | Positions |
 | `weights` | mmap / materialize | Dequant kernels |
 
-## RMSNorm pipeline
+## SwiGLU pipeline
 
 ```mermaid
 flowchart LR
-    X["activations (…, D)"] --> RMS["RmsNorm::forward"]
-    G["γ weight [D]"] --> RMS
-    E["eps"] --> RMS
-    RMS --> Y["normalized (…, D)"]
+    X["x (…, D)"] --> Gate["gate = SiLU(x W1ᵀ)"]
+    X --> Up["up = x W3ᵀ"]
+    Gate --> Had["gate ⊙ up"]
+    Up --> Had
+    Had --> Down["y = hid W2ᵀ"]
 ```
 
 ## Boundary rules
@@ -81,8 +87,9 @@ flowchart LR
 7. **Layers read shapes from `ModelConfig`**, not raw metadata maps.
 8. **ggml dimension order is reinterpreted explicitly** at layer boundaries.
 9. **RoPE does not touch V** — only Q/K (attention Phase 11).
-10. **RMSNorm is not LayerNorm** — no mean centering; Spec-noncompliant otherwise.
-11. **Cross-impl validators** (`validate_rope`, `validate_rmsnorm`) are part of the public contract.
+10. **RMSNorm is not LayerNorm** — no mean centering.
+11. **SwiGLU is not GeLU MLP** — Spec activation key must remain `swiglu`.
+12. **Cross-impl validators** are part of the public contract.
 
 ## Module ownership
 
@@ -93,23 +100,20 @@ flowchart LR
 | `tokenizer` | Vocab, specials, encode/decode | Phase 4 |
 | `weights` | mmap, quant meta, materialize | Phase 5 |
 | `model` | Architecture + hyperparameters | Phase 6 |
-| `layers` | Embedding + RoPE + RMSNorm | Phase 7–**9** |
+| `layers` | Embedding + RoPE + RMSNorm + SwiGLU | Phase 7–**10** |
 
 ## Tradeoffs recorded
 
-### Float64 RMS reduction
+### Float64 matmul accumulators
 
 | Option | Pros | Cons |
 |---|---|---|
-| **f64 Σx² then f32 RMS (chosen)** | Bit-match Odyssey; stable for D=768+ | Extra cast |
-| Pure f32 reduction | Slightly faster | ~1e-6 drift vs Odyssey |
+| **f64 Σ then f32 store (chosen)** | Closer to PyTorch; Spec parity | Slightly slower reference kernel |
+| Pure f32 ijk | Faster | Larger max abs error vs Odyssey |
 
-### Linear-only RoPE scaling (Phase 8)
+### SwiGLU abs tolerance `1e-3`
 
-| Option | Pros | Cons |
-|---|---|---|
-| **Linear only (chosen)** | Matches common GGUF exports; correct math | YaRN/NTK rejected |
-| Stub all scaling types as no-ops | Broader open | Silently wrong long-context |
+Documented component exception to the default `1e-6` (mean error remains ≪ `1e-6`).
 
 ## Evolution policy
 
