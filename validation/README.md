@@ -23,7 +23,7 @@ validation/
 ├── test_rope.py            # live
 ├── test_rmsnorm.py         # live
 ├── test_swiglu.py          # live
-└── test_attention.py       # stub
+└── test_attention.py       # live
 ```
 
 ---
@@ -38,7 +38,7 @@ Each live validator:
 4. Compares outputs within a configurable tolerance.
 5. Prints **max error**, **mean error**, **PASS/FAIL**.
 
-Default float32 tolerance: `1e-6` (SwiGLU documents `1e-3` for GEMM accum order).
+Default float32 tolerance: `1e-6` (SwiGLU / Attention document `1e-3` for GEMM accum order).
 
 ---
 
@@ -48,6 +48,7 @@ Default float32 tolerance: `1e-6` (SwiGLU documents `1e-3` for GEMM accum order)
 python validation/test_rmsnorm.py
 python validation/test_rope.py
 python validation/test_swiglu.py
+python validation/test_attention.py
 ```
 
 ---
@@ -60,7 +61,7 @@ python validation/test_swiglu.py
 | RoPE | ✓ | ✓ | ✓ `test_rope.py` |
 | RMSNorm | ✓ | ✓ | ✓ `test_rmsnorm.py` |
 | SwiGLU | ✓ | ✓ | ✓ `test_swiglu.py` |
-| Attention | — | — | stub |
+| Attention | ✓ | ✓ | ✓ `test_attention.py` |
 | KV Cache / Decoder / Sampling | — | — | future |
 
 ---

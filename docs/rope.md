@@ -71,7 +71,7 @@ Accepted activation shapes: `[seq, head_dim]` or `[seq, n_heads, head_dim]`.
 | Partial rotary dims | ✅ |
 | Linear position scale | ✅ |
 | YaRN / NTK / sectioned RoPE | ❌ later |
-| Apply inside attention module | ❌ Phase 11 |
+| Apply inside attention module | ✓ Phase 11 (`Attention::forward`) |
 
 ## References
 

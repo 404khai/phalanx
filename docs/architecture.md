@@ -1,4 +1,4 @@
-# Architecture — Phase 10
+# Architecture — Phase 11
 
 This document tracks architectural intent as Phalanx grows. Update it every
 phase; the README embeds a summary diagram for quick reading.
@@ -11,7 +11,7 @@ phase; the README embeds a summary diagram for quick reading.
 - **Educational clarity** — diagrams and notes explain *why*, not only *what*.
 - **Odyssey parity** — Rule 6: claim Spec compliance only after `validate_*` PASSes.
 
-## Phase 10 component map
+## Phase 11 component map
 
 ```mermaid
 flowchart TB
@@ -26,6 +26,7 @@ flowchart TB
     rope["layers::Rope"]
     rms["layers::RmsNorm"]
     ffn["layers::SwiGlu"]
+    attn["layers::Attention"]
     tensor["tensor::Tensor"]
 
     main --> lib
@@ -57,11 +58,12 @@ flowchart TB
 
 ### Responsibilities
 
-| Component | Responsibility | Non-goals (Phase 10) |
+| Component | Responsibility | Non-goals (Phase 11) |
 |---|---|---|
-| `layers::SwiGlu` | Gated FFN forward | Attention / residuals |
+| `layers::SwiGlu` | Gated FFN forward | Residuals / decoder |
+| `layers::Attention` | Causal GQA/MHA + optional RoPE | KV cache / FlashAttention |
 | `layers::RmsNorm` | γ ⊙ x / RMS(x) | Residual block wiring |
-| `layers::Rope` | Cos/sin cache + Q/K rotate | Attention scores |
+| `layers::Rope` | Cos/sin cache + Q/K rotate | Standalone score kernel |
 | `layers::EmbeddingTable` | Token gather | Positions |
 | `weights` | mmap / materialize | Dequant kernels |
 
@@ -86,7 +88,7 @@ flowchart LR
 6. **Quantized payloads stay as `&[u8]`** until a kernel needs dequant.
 7. **Layers read shapes from `ModelConfig`**, not raw metadata maps.
 8. **ggml dimension order is reinterpreted explicitly** at layer boundaries.
-9. **RoPE does not touch V** — only Q/K (attention Phase 11).
+9. **RoPE does not touch V** — only Q/K (applied inside `Attention::forward`).
 10. **RMSNorm is not LayerNorm** — no mean centering.
 11. **SwiGLU is not GeLU MLP** — Spec activation key must remain `swiglu`.
 12. **Cross-impl validators** are part of the public contract.

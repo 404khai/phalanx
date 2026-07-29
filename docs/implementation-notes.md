@@ -95,7 +95,7 @@ kernel changes as signal, not absolute SLA yet.
 
 ### Follow-ups deferred
 
-- Broadcasting / batched matmul → when attention needs them
+- Batched matmul helpers → still local loops inside Attention (Phase 11)
 - f16 / bf16 / quantized storage → Phase 5+
 - SIMD / blocked matmul → Phase 17
 - Strided views → Phase 12 (KV cache)
@@ -430,7 +430,7 @@ gather correctness is the Phase 7 deliverable.
 ### Follow-ups deferred
 
 - YaRN / NTK / sectioned RoPE
-- Wire into attention (Phase 11)
+- Wire into attention ✓ (Phase 11)
 - Complex-view / SIMD rotate kernels (Phase 17)
 
 ### References used this phase
@@ -526,3 +526,26 @@ gather correctness is the Phase 7 deliverable.
 
 - [GLU Variants](https://arxiv.org/abs/2002.05202)
 - Odyssey Spec `feedforward.md`
+
+
+## Phase 11 — Attention
+
+### What shipped
+
+- `layers::Attention` with Spec formula `softmax(QKᵀ/√d + M) V` then `W_O`
+- GQA KV expansion (`H / H_kv` query heads per KV head)
+- Optional `Rope` on Q/K inside `forward`
+- GGUF name helpers `attn_q/k/v/output`
+- Cross-impl validator `validate_attention` (tol `1e-3`)
+
+### Tradeoffs
+
+- Prefill-only dense scores (no KV cache yet) — simpler correctness path before Phase 12
+- Reference nested loops + f64 accumulators — matches Odyssey parity over raw speed
+- Softmax max-subtraction in float32 — Spec stability recommendation
+
+### Testing strategy (Phase 11)
+
+- Unit: shape preserve (MHA/GQA), causal finite outputs, GGUF name helpers
+- Integration smoke: public `Attention` re-export
+- Cross-impl: Odyssey `scripts/validate_attention.py` (with and without RoPE)

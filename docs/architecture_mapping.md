@@ -28,7 +28,7 @@ flowchart TB
         LEmb[layers::EmbeddingTable]
         LRope[layers::Rope]
         LNorm[RMSNorm future]
-        LAttn[Attention future]
+        LAttn[Attention]
         LFfn[FFN future]
         LKv[KV cache future]
         LSamp[Sampler future]
@@ -57,7 +57,7 @@ flowchart TB
 | RoPE | positions on Q/K | `llama.rope.*` | `Rope` ✓ |
 | RMSNorm | `*.attention_norm` / `ffn_norm` / `norm` | `blk.*.attn_norm` / `ffn_norm` / `output_norm` | `RmsNorm` ✓ |
 | SwiGLU | `w1/w3/w2` | `blk.*.ffn_gate/up/down` | `SwiGlu` ✓ |
-| Attention | `wq/wk/wv/wo` | `blk.*.attn_*` | Planned |
+| Attention | `wq/wk/wv/wo` | `blk.*.attn_q/k/v/output` | `Attention` ✓ |
 | SwiGLU | `w1/w3/w2` | `ffn_gate/up/down` | Planned |
 | KV cache | runtime state | — | Planned |
 | LM head | `output.weight` | `output.weight` | Planned |
@@ -74,6 +74,7 @@ flowchart TB
 | RoPE | `Rope::forward` on Q/K |
 | RMSNorm | `RmsNorm::forward` on residual stream |
 | SwiGLU | `SwiGlu::forward` |
+| Attention | `Attention::forward` |
 | Attn / block residuals | Not wired |
 | Logits / sample | Not wired |
 
@@ -99,7 +100,7 @@ flowchart LR
 
 1. Require / read `odyssey.spec.version`
 2. Native load of `odyssey-bpe` artifacts (parity with Python)
-3. RMSNorm → SwiGLU → Attention → KV → Decoder → Sampling
+3. RMSNorm → SwiGLU → Attention ✓ → KV → Decoder → Sampling
 4. Golden parity tests against Odyssey tensors
 
 ---

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Shared suite: Attention parity (stub until Phase landing on both sides)."""
+"""Shared suite: Attention parity (Odyssey ↔ Phalanx)."""
 
 from __future__ import annotations
 
-from _common import stub_message
+from _common import run_odyssey_validator
 
 
 def main() -> int:
-    return stub_message("Attention")
+    return run_odyssey_validator("validate_attention.py")
 
 
 if __name__ == "__main__":
