@@ -1,4 +1,4 @@
-# Architecture — Phase 8
+# Architecture — Phase 9
 
 This document tracks architectural intent as Phalanx grows. Update it every
 phase; the README embeds a summary diagram for quick reading.
@@ -9,8 +9,9 @@ phase; the README embeds a summary diagram for quick reading.
 - **Readable systems code** — senior engineers should navigate without tribal knowledge.
 - **Incremental completeness** — each phase ships a compiling, tested slice.
 - **Educational clarity** — diagrams and notes explain *why*, not only *what*.
+- **Odyssey parity** — Rule 6: claim Spec compliance only after `validate_*` PASSes.
 
-## Phase 8 component map
+## Phase 9 component map
 
 ```mermaid
 flowchart TB
@@ -23,6 +24,7 @@ flowchart TB
     model["model::ModelConfig"]
     emb["layers::EmbeddingTable"]
     rope["layers::Rope"]
+    rms["layers::RmsNorm"]
     tensor["tensor::Tensor"]
 
     main --> lib
@@ -33,6 +35,7 @@ flowchart TB
     lib --> model
     lib --> emb
     lib --> rope
+    lib --> rms
     lib --> tensor
     tok --> gguf
     weights --> gguf
@@ -40,27 +43,31 @@ flowchart TB
     emb --> weights
     emb --> model
     rope --> model
+    rms --> model
+    rms --> weights
     emb --> tensor
     rope --> tensor
+    rms --> tensor
 ```
 
 ### Responsibilities
 
-| Component | Responsibility | Non-goals (Phase 8) |
+| Component | Responsibility | Non-goals (Phase 9) |
 |---|---|---|
-| `model` | Hparams including `rope.*` | Execute rotations |
+| `model` | Hparams including `rms_norm_eps` | Execute norms |
+| `layers::RmsNorm` | γ ⊙ x / RMS(x) | Residual block wiring |
 | `layers::Rope` | Cos/sin cache + Q/K rotate | Attention scores |
 | `layers::EmbeddingTable` | Token gather | Positions |
 | `weights` | mmap / materialize | Dequant kernels |
 
-## RoPE pipeline
+## RMSNorm pipeline
 
 ```mermaid
 flowchart LR
-    Cfg["ModelConfig.rope"] --> Cache["cos/sin tables"]
-    QK["Q/K activations"] --> Apply["Rope::forward"]
-    Cache --> Apply
-    Apply --> Out["rotated Q/K"]
+    X["activations (…, D)"] --> RMS["RmsNorm::forward"]
+    G["γ weight [D]"] --> RMS
+    E["eps"] --> RMS
+    RMS --> Y["normalized (…, D)"]
 ```
 
 ## Boundary rules
@@ -74,6 +81,8 @@ flowchart LR
 7. **Layers read shapes from `ModelConfig`**, not raw metadata maps.
 8. **ggml dimension order is reinterpreted explicitly** at layer boundaries.
 9. **RoPE does not touch V** — only Q/K (attention Phase 11).
+10. **RMSNorm is not LayerNorm** — no mean centering; Spec-noncompliant otherwise.
+11. **Cross-impl validators** (`validate_rope`, `validate_rmsnorm`) are part of the public contract.
 
 ## Module ownership
 
@@ -84,18 +93,18 @@ flowchart LR
 | `tokenizer` | Vocab, specials, encode/decode | Phase 4 |
 | `weights` | mmap, quant meta, materialize | Phase 5 |
 | `model` | Architecture + hyperparameters | Phase 6 |
-| `layers` | Embedding + RoPE (+ future kernels) | Phase 7–**8** |
+| `layers` | Embedding + RoPE + RMSNorm | Phase 7–**9** |
 
 ## Tradeoffs recorded
 
-### Precompute cos/sin vs on-the-fly
+### Float64 RMS reduction
 
 | Option | Pros | Cons |
 |---|---|---|
-| **Precompute to `context_length` (chosen)** | Fast decode; auditable tables | Memory ∝ ctx × pairs |
-| Compute `sin`/`cos` per call | Tiny footprint | Repeated transcendentals |
+| **f64 Σx² then f32 RMS (chosen)** | Bit-match Odyssey; stable for D=768+ | Extra cast |
+| Pure f32 reduction | Slightly faster | ~1e-6 drift vs Odyssey |
 
-### Linear-only scaling in Phase 8
+### Linear-only RoPE scaling (Phase 8)
 
 | Option | Pros | Cons |
 |---|---|---|
@@ -110,3 +119,4 @@ When a phase adds a subsystem:
 2. Update Mermaid diagrams here and in the README.
 3. Record the tradeoff that drove the design.
 4. Extend `PhalanxError` with a typed nested error.
+5. Add `validate_<component>` and land a PASS report before flipping Spec compliance.

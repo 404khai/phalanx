@@ -3,8 +3,8 @@
 //! A high-performance, educational inference runtime for decoder-only
 //! language models, beginning with GGUF-format weights.
 //!
-//! Phase 8 adds [`layers::Rope`]: Llama-style rotary positional embeddings
-//! applied to Q/K activations using precomputed cos/sin caches.
+//! Phase 9 adds [`layers::RmsNorm`]: Llama-style root-mean-square
+//! normalization applied to residual-stream activations.
 //!
 //! # Crate layout
 //!
@@ -14,7 +14,7 @@
 //! - [`tokenizer`] — vocab, special tokens, encode / decode
 //! - [`weights`] — mmap + quant metadata + dense materialization
 //! - [`model`] — architecture + transformer config
-//! - [`layers`] — embedding, `RoPE` (and future norm / attention / `FFN`)
+//! - [`layers`] — embedding, `RoPE`, `RMSNorm` (and future attention / `FFN`)
 //! - [`utils`] — cross-cutting helpers (logging today; more later)
 
 #![doc(html_root_url = "https://docs.rs/phalanx/0.1.0")]
@@ -30,7 +30,10 @@ pub mod weights;
 
 pub use errors::{PhalanxError, Result};
 pub use gguf::{GgmlType, GgufError, GgufFile, GgufHeader, MetadataValue, TensorInfo};
-pub use layers::{EmbeddingTable, LayersError, Rope, TOKEN_EMBD_WEIGHT};
+pub use layers::{
+    EmbeddingTable, LayersError, OUTPUT_NORM_WEIGHT, RmsNorm, Rope, TOKEN_EMBD_WEIGHT,
+    attn_norm_weight_name, ffn_norm_weight_name,
+};
 pub use model::{Architecture, AttentionConfig, ModelConfig, ModelError, RopeConfig, RopeScaling};
 pub use tensor::{DType, Shape, Tensor, TensorError};
 pub use tokenizer::{

@@ -438,3 +438,47 @@ gather correctness is the Phase 7 deliverable.
 - [RoFormer](https://arxiv.org/abs/2104.09864)
 - [LLaMA](https://arxiv.org/abs/2302.13971)
 - llama.cpp RoPE + GGUF `rope.*` keys
+
+---
+
+## Phase 9 — RMSNorm
+
+### Delivered
+
+- `layers::RmsNorm` with Spec formula `γ ⊙ x / RMS(x)`
+- `eps` from `ModelConfig::rms_norm_eps`
+- GGUF γ helpers: `attn_norm_weight_name`, `ffn_norm_weight_name`, `OUTPUT_NORM_WEIGHT`
+- Cross-impl binary `src/bin/validate_rmsnorm.rs`
+- Docs: `docs/rmsnorm.md`
+
+### Decision log
+
+#### 1. No mean centering (RMS only)
+
+**Pros:** Matches Odyssey Spec / LLaMA; cheaper than LayerNorm.
+**Cons:** Diverges from original Transformer post-norm stacks.
+**Reason:** Spec compliance is non-negotiable (Rule 6).
+
+#### 2. Float32 sum-of-squares in the kernel
+
+**Pros:** Matches Odyssey `normalization.rms` accumulation path.
+**Cons:** Slightly more ops than a pure fp16 path.
+**Reason:** Cross-impl parity at `1e-6` before chasing speed.
+
+### Testing strategy (Phase 9)
+
+| Layer | Location | Covers |
+|---|---|---|
+| Unit | `layers::rmsnorm` | unit RMS, γ scale, shape, eps reject |
+| Integration | `tests/smoke.rs` | public unit-RMS check |
+| Parity | `validate_rmsnorm` + Odyssey script | max/mean abs error |
+
+### Follow-ups deferred
+
+- Wire into decoder pre-norm residuals (Phase 13)
+- SIMD / fused norm kernels (Phase 17)
+
+### References used this phase
+
+- [RMSNorm](https://arxiv.org/abs/1910.07467)
+- Odyssey Spec `rmsnorm.md`

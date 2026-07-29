@@ -1,4 +1,4 @@
-# Odyssey Spec Compliance
+# Spec Compliance
 
 **Runtime role:** Reference inference implementation for Odyssey  
 **Target specification:** [Odyssey Spec `1.0.0`](../../odyssey/spec/README.md)  
@@ -15,19 +15,19 @@ This matrix is the roadmap to full Odyssey compatibility. It does **not** author
 | Architecture metadata load | ✓ Partial | `model::ModelConfig` | Llama GGUF keys; Odyssey KV not yet required |
 | Tensor shape invariants | ✓ Partial | `ModelConfig::validate` | Head/GQA/RoPE checks |
 | Tokenizer API parity | ✗ | `tokenizer::Tokenizer` | GGUF path only; no `odyssey-bpe` dir loader yet |
-| Weight naming (GGUF map) | ✓ Partial | `token_embd.weight` | Only embedding bound |
+| Weight naming (GGUF map) | ✓ Partial | `token_embd` + norm γ names | Embedding + RMSNorm γ bound |
 | Embedding gather | ✓ | `layers::EmbeddingTable` | Matches Spec `(V,D)` logical table |
-| RoPE | ✓ | `layers::Rope` | θ, partial rotary, linear scaling; **validated vs Odyssey** (`validate_rope` / `scripts/validate_rope.py`, max err ≈ 4.8e-7) |
-| RMSNorm | ✗ | — | Phase 9 |
+| RoPE | ✓ | `layers::Rope` | θ, partial rotary, linear scaling; **validated vs Odyssey** |
+| RMSNorm | ✓ | `layers::RmsNorm` | Spec formula; **validated vs Odyssey** (`validate_rmsnorm`) |
 | Attention (causal / GQA) | ✗ | — | Phase 11 |
 | SwiGLU FFN | ✗ | — | Phase 10 |
-| Residual pre-norm block | ✗ | — | Phase 13 |
+| Residual pre-norm block | ✗ | — | Phase 13 (helpers land with decoder) |
 | Final norm + LM head | ✗ | — | Phase 13 |
 | KV cache | ✗ | — | Phase 12 |
 | Sampling | ✗ | — | Phase 14 |
 | Full decoder forward | ✗ | — | Phase 13 |
 | Spec version negotiation | ✗ | — | Read `odyssey.spec.version` KV |
-| Numeric parity tests vs Odyssey | ✗ | — | After shared fixtures |
+| Numeric parity tests vs Odyssey | ✓ Partial | `validate_rope` / `validate_rmsnorm` | Shared suite: `../validation/` |
 
 Legend: ✓ done · ✗ not done · Partial = present but not full Spec surface.
 
@@ -38,8 +38,8 @@ Legend: ✓ done · ✗ not done · Partial = present but not full Spec surface.
 ```mermaid
 flowchart TD
     Spec[Odyssey Spec 1.0.0]
-    Done[Done: Emb + RoPE + Config + GGUF IO]
-    Next[Next: RMSNorm → FFN → Attn → KV → Decoder → Sample]
+    Done[Done: Emb + RoPE + RMSNorm + Config + GGUF IO]
+    Next[Next: FFN → Attn → KV → Decoder → Sample]
     Spec --> Done --> Next
 ```
 
